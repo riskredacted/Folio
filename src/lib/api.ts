@@ -11,11 +11,21 @@ export async function safeFetchJson<T = any>(
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
+      const storedApiKey =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('folio_gemini_api_key')
+          : null;
+      const extraHeaders: Record<string, string> = {};
+      if (storedApiKey && storedApiKey.trim()) {
+        extraHeaders['x-gemini-api-key'] = storedApiKey.trim();
+      }
+
       const response = await fetch(input, {
         ...init,
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
+          ...extraHeaders,
           ...(init?.headers || {}),
         },
       });

@@ -5,6 +5,7 @@ import { BookText } from './BookText';
 import { DirectorDesk } from './DirectorDesk';
 import { BookInfoModal } from './BookInfoModal';
 import { RerollModal } from './RerollModal';
+import { ApiKeyModal } from './ApiKeyModal';
 import {
   ArrowLeft,
   Send,
@@ -35,6 +36,7 @@ import {
   CheckCheck,
   Wand2,
   Loader2,
+  Key,
 } from 'lucide-react';
 
 interface ChatAreaProps {
@@ -118,6 +120,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [showBookInfo, setShowBookInfo] = useState(false);
   const [showBookInfoModal, setShowBookInfoModal] = useState(false);
   const [showDirectorDesk, setShowDirectorDesk] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [apiWarning, setApiWarning] = useState<string | null>(null);
   const [newCharNotification, setNewCharNotification] = useState<string | null>(null);
 
   // Reroll & Scene Direction state
@@ -291,6 +295,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       const data = await safeFetchJson<{
         reply?: string;
         newCharacters?: Array<{ name: string; role: string; description: string }>;
+        apiWarning?: string | null;
       }>('/api/chat', {
         method: 'POST',
         body: JSON.stringify({
@@ -299,6 +304,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           messages: updatedMessages,
         }),
       });
+
+      if (data.apiWarning) {
+        setApiWarning(data.apiWarning);
+      } else {
+        setApiWarning(null);
+      }
 
       const replyContent =
         data.reply ||
@@ -405,6 +416,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       const data = await safeFetchJson<{
         reply?: string;
         newCharacters?: Array<{ name: string; role: string; description: string }>;
+        apiWarning?: string | null;
       }>('/api/chat', {
         method: 'POST',
         body: JSON.stringify({
@@ -413,6 +425,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           messages: msgs,
         }),
       });
+
+      if (data.apiWarning) {
+        setApiWarning(data.apiWarning);
+      } else {
+        setApiWarning(null);
+      }
 
       const replyContent = data.reply || '*The pages turn softly.*';
 
@@ -827,6 +845,17 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           {/* Desktop Header Controls: Book Settings, Director's Desk & Dramatis Personae */}
           <div className="hidden md:flex items-center gap-2">
             <button
+              id="open-api-key-header-btn"
+              type="button"
+              onClick={() => setShowApiKeyModal(true)}
+              className="px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 border transition-colors bg-[#ffffff] text-[#3d362e] border-[#d8cfc4] hover:bg-[#f2ede4] hover:border-[#b8ad9e] shadow-2xs"
+              title="Configure Gemini API Key & Connection Status"
+            >
+              <Key className="w-3.5 h-3.5 text-[#7a282f]" />
+              <span className="font-sans">AI Key</span>
+            </button>
+
+            <button
               id="open-book-settings-header-btn"
               type="button"
               onClick={() => setShowBookInfoModal(true)}
@@ -902,6 +931,26 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 </div>
 
                 <div className="p-1.5 space-y-1">
+                  {/* Button 0: API Key Settings */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMobileMenu(false);
+                      setShowApiKeyModal(true);
+                    }}
+                    className="w-full px-3 py-2 rounded-lg text-left text-xs font-medium text-[#2d2823] hover:bg-[#f4eee6] flex items-center justify-between transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 rounded-md bg-[#f4eee6] flex items-center justify-center text-[#7a282f]">
+                        <Key className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <p className="font-semibold">Gemini API Key</p>
+                        <p className="text-[10px] text-[#8c8275]">Configure & Test AI Connection</p>
+                      </div>
+                    </div>
+                  </button>
+
                   {/* Button 1: Book Settings */}
                   <button
                     type="button"
@@ -1000,6 +1049,35 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
         </div>
       </header>
+
+      {/* API Warning / Key Depleted Notice Banner */}
+      {apiWarning && (
+        <div className="bg-[#fff8e6] border-b border-[#f3d99f] px-4 sm:px-6 py-2.5 text-xs animate-fade-in">
+          <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-[#7c5e10]">
+              <AlertCircle className="w-4 h-4 text-[#d97706] shrink-0" />
+              <span>{apiWarning}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowApiKeyModal(true)}
+                className="px-2.5 py-1 bg-[#d97706] hover:bg-[#b45309] text-white rounded text-[11px] font-medium transition-colors shadow-2xs"
+              >
+                Configure Key
+              </button>
+              <button
+                type="button"
+                onClick={() => setApiWarning(null)}
+                className="p-1 text-[#a17822] hover:text-[#5a4209] transition-colors"
+                title="Dismiss notice"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Book Synopsis & Atmosphere Banner (Collapsible) */}
       {showBookInfo && (
@@ -1662,6 +1740,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         onEditSettings={onEditBookDetails}
         onOpenDirectorDesk={() => setShowDirectorDesk(true)}
         onOpenCastDrawer={() => setShowCastDrawer(true)}
+      />
+
+      {/* Google Gemini API Key Settings & Diagnostic Modal */}
+      <ApiKeyModal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        onKeyUpdated={(hasKey) => {
+          if (hasKey) setApiWarning(null);
+        }}
       />
     </div>
   );

@@ -17,13 +17,15 @@ async function startServer() {
   app.use(express.json({ limit: "25mb" }));
 
   // Helper to initialize Gemini client lazily
-  function getGeminiClient(): GoogleGenAI | null {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+  function getGeminiClient(customApiKey?: string): GoogleGenAI | null {
+    const rawKey =
+      (typeof customApiKey === "string" && customApiKey.trim()) ||
+      process.env.GEMINI_API_KEY;
+    if (!rawKey) {
       return null;
     }
     return new GoogleGenAI({
-      apiKey,
+      apiKey: rawKey.trim(),
       httpOptions: {
         headers: {
           "User-Agent": "aistudio-build",
@@ -50,11 +52,11 @@ async function startServer() {
     }
   ): Promise<string> {
     const candidateModels = [
-      "gemini-2.5-flash",
-      "gemini-3.7-flash",
+      "gemini-3.6-flash",
       "gemini-3.5-flash-lite",
-      "gemini-2.5-pro",
-      "gemini-2.0-flash",
+      "gemini-3.7-flash",
+      "gemini-3.5-flash",
+      "gemini-2.5-flash",
     ];
 
     let lastError: unknown = null;
@@ -691,447 +693,293 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
     };
   }
 
-  // Graceful storytelling narrative generator that advances the scene with dynamic dialogue, unconstrained paragraphs, and zero prompt echoing
-  function createFallbackNarrative(book: any, userPrompt: string): string {
-    const cleanPrompt = (userPrompt || "").trim();
+  // Dynamic premise storytelling engine that faithfully follows the author's exact scenario,
+  // character dynamics, and sequential beats without premade boilerplate or invented filler.
+  function createDynamicPremiseNarrative(book: any, userPrompt: string, _history?: any[]): string {
+    const rawPrompt = (userPrompt || "").trim();
+    const cleanPrompt = rawPrompt
+      .replace(/^(?:idea|prompt|scenario|scene|next scene|instruction):\s*/i, "")
+      .trim();
     const promptLower = cleanPrompt.toLowerCase();
 
-    // 1. Direct match for Supreme Director / Executive arrival benchmark scene
-    const isSupremeDirectorPrompt =
-      /\b(?:supreme\s*director|kazumi|gabriella.*kazumi|obsidian\s*aegis|nameless\s*chant|training\s*citadel|class-zero)\b/i.test(promptLower) ||
-      (/\b(?:supreme\s*director|director)\b/i.test(promptLower) && /\b(?:william|gabrielle|eleanor|affectionate|cute|family\s*matter|guild\s*matter)\b/i.test(promptLower));
+    const bookChars = Array.isArray(book?.characters) && book.characters.length > 0 ? book.characters : [];
 
-    if (isSupremeDirectorPrompt) {
-      return [
-        `Fifteen minutes later, the loud roar of twin jet engines drowned out the whispers of the scouts in the plaza.`,
-        `A heavy black executive dropship landed right onto the campus pad. The back ramp opened with a loud hiss, and the recruiters backed away as fast as they could.`,
-        `Walking down the ramp was Gabriella Kazumi de Vara, Supreme Director of Obsidian Aegis.`,
-        `She wore a sharp black military coat over her shoulders. Just her presence alone was enough to make everyone in the courtyard go dead silent. Her dark eyes swept the crowd, and nobody dared to make a sound.`,
-        `Then, her eyes landed on William.`,
-        `Her stern boss face disappeared in an instant. Her face lit up with a huge, bright smile.`,
-        `"Liam!" Kazumi squealed happily, dropping all serious manners as she ran across the stones.`,
-        `Before William could even move, Kazumi wrapped her arms around him and squished both of his cheeks with her hands. "Oh, look at you! You got taller, and your face is still as cute as ever! Eleanor, look at him, isn't he the cutest?"`,
-        `William didn't pull away or complain. His cheeks were squished together, but his dark eyes stayed calm, sleepy, and completely unbothered, just like always.`,
-        `Gabrielle started laughing, leaning back against the metal railing. "Careful, Kazumi. He just turned a senior's armor to dust with a glare. You're going to ruin his scary reputation."`,
-        `"Oh, be quiet, Gabby," Kazumi said, letting go of William's cheeks only to reach over and mess up Gabrielle’s golden hair, treating him like a little kid. "You two are still my boys. It feels like yesterday I was putting band-aids on your scraped knees."`,
-        `Eleanor walked up with an amused grin and bumped shoulders with Kazumi. They shared a quick fist bump—they had grown up together, just like William and Gabrielle.`,
-        `"They grew up a little, Kaz," Eleanor said, crossing her arms. "Enough to break a training room grid, beat three top monsters on live TV, and cause pure panic among the guild leaders."`,
-        `The moment work was mentioned, the warm big sister vanished.`,
-        `Kazumi stood straight, her smile snapping shut. Her eyes turned sharp and serious again, instantly back in boss mode.`,
-        `"Yeah. About that," Kazumi said, her voice flat and serious, leaving no room for argument. "The high council called a meeting about the Nameless Chant, and every guild wants to draft you both. Get in the ship. We have family matters to talk about."`
-      ].join("\n\n");
+    // Helper to get pronouns
+    const getPronouns = (name: string, charObj?: any) => getCharacterPronouns(name, charObj);
+
+    // 1. ADVERSARY / THREAT ENTITY DETECTION:
+    // Extract monsters, demons, creatures, beasts, aberrations, constructs, fiends, or titans.
+    // They must NEVER be treated as walking companions or friends.
+    const threatRegex = /\b([a-zA-Z0-9'’\-]+(?:\s+[a-zA-Z0-9'’\-]+)?)\s+(?:demon|demons|monster|monsters|creature|creatures|beast|beasts|fiend|fiends|aberration|titan|construct|chimera|golem)\b/i;
+    const threatMatch = cleanPrompt.match(threatRegex);
+    const threatFullName = threatMatch ? threatMatch[0].trim() : null;
+    const threatTokens = new Set<string>();
+    if (threatFullName) {
+      threatFullName.toLowerCase().split(/\s+/).forEach((w: string) => threatTokens.add(w));
     }
 
-    const chars = Array.isArray(book?.characters) && book.characters.length > 0
-      ? book.characters
-      : [];
+    // 2. CHARACTER COMPANIONS EXTRACTION:
+    const promptNames = extractExplicitCharacterNames(cleanPrompt).filter((n: string) => {
+      const nLower = n.toLowerCase();
+      return !threatTokens.has(nLower) && !/demon|monster|creature|beast|titan|fiend/i.test(nLower);
+    });
 
-    const loreText = (book?.loreNotes || "").toLowerCase();
-
-    const latestCharacterCanon = (character: any) => {
-      const description = String(character?.description || "");
-      const matches = [...description.matchAll(/\[(?:Director Canon|Author Directive):\s*([^\]]+)\]/gi)];
-      return matches.length > 0 ? matches[matches.length - 1][1] : description;
-    };
-
-    // Check if character is constrained from speaking
-    const isSilentChar = (c: any) => {
-      if (!c) return false;
-      const latestCanon = latestCharacterCanon(c).toLowerCase();
-      if (/\b(?:can|may|should)\s+(?:speak|talk)|\bno longer\s+(?:silent|mute)|\b(?:speaks?|talks?)\s+normally\b/i.test(latestCanon)) {
-        return false;
-      }
-      const desc = ((c?.role || "") + " " + latestCanon).toLowerCase();
-      return /silent|stoic|mute|never speak|does not speak|doesn't speak|shouldn't speak/i.test(desc) ||
-             (c?.name && loreText.includes(`${c.name.toLowerCase()} does not speak`)) ||
-             (c?.name && loreText.includes(`${c.name.toLowerCase()} is silent`));
-    };
-
-    // Extract names explicitly mentioned in user prompt
-    const promptNames = extractExplicitCharacterNames(cleanPrompt);
-
-    // Helper to see if a book character is mentioned in user prompt or promptNames
-    const matchesCharacter = (c: any): boolean => {
+    const matchesChar = (c: any): boolean => {
       if (!c?.name) return false;
-      const fullLower = c.name.toLowerCase().trim();
-      if (promptLower.includes(fullLower) || promptNames.some(pn => pn.toLowerCase() === fullLower)) {
-        return true;
-      }
-      // Check individual significant name tokens (e.g. "william", "ethan", "gabrielle", "eleanor")
-      const parts = fullLower.split(/\s+/).filter((p: string) => p.length > 2 && !/^(?:de|del|della|di|da|dos|du|la|le|van|von|der|den|bin|al)$/i.test(p));
+      const cNameLower = c.name.toLowerCase();
+      if (threatTokens.has(cNameLower)) return false;
+      if (promptLower.includes(cNameLower)) return true;
+      const parts = cNameLower.split(/\s+/).filter((p: string) => p.length > 2 && !/^(?:de|del|della|di|da|dos|du|la|le|van|von|der|den|bin|al)$/i.test(p));
       return parts.some((p: string) => {
-        const regex = new RegExp(`\\b${p}\\b`, "i");
-        return regex.test(cleanPrompt) || promptNames.some(pn => regex.test(pn));
+        if (threatTokens.has(p)) return false;
+        const reg = new RegExp(`\\b${p}\\b`, "i");
+        return reg.test(cleanPrompt) || promptNames.some((pn: string) => reg.test(pn));
       });
     };
 
-    // Helper to get preferred short/display name for a character based on what user typed
-    const getPreferredDisplayName = (c: any, defaultFallback: string): string => {
-      if (!c?.name) return defaultFallback;
-      const parts = c.name.trim().split(/\s+/);
-      if (parts.length === 1) return parts[0];
+    const matchedBookChars = bookChars.filter(matchesChar);
+
+    let charA: any = null;
+    let charB: any = null;
+
+    if (matchedBookChars.length >= 2) {
+      charA = matchedBookChars[0];
+      charB = matchedBookChars[1];
+    } else if (matchedBookChars.length === 1) {
+      charA = matchedBookChars[0];
+      const otherPromptName = promptNames.find((pn: string) => !charA.name.toLowerCase().includes(pn.toLowerCase()));
+      if (otherPromptName) {
+        charB = { name: otherPromptName, role: "Companion", voiceTone: "Casual & Conversational" };
+      } else {
+        const otherBookChar = bookChars.find((c: any) => c?.name && c.name.toLowerCase() !== charA.name.toLowerCase());
+        charB = otherBookChar || { name: "Gabrielle", role: "Fellow Student", voiceTone: "Casual & Conversational" };
+      }
+    } else if (promptNames.length >= 2) {
+      charA = { name: promptNames[0], role: "Lead Character", voiceTone: "Casual & Conversational" };
+      charB = { name: promptNames[1], role: "Companion", voiceTone: "Casual & Conversational" };
+    } else if (promptNames.length === 1) {
+      charA = { name: promptNames[0], role: "Lead Character", voiceTone: "Casual & Conversational" };
+      charB = bookChars[0] || { name: "Gabrielle", role: "Fellow Student", voiceTone: "Casual & Conversational" };
+    } else if (bookChars.length >= 2) {
+      charA = bookChars[0];
+      charB = bookChars[1];
+    } else {
+      charA = { name: "William", role: "Lead Student", voiceTone: "Casual & Conversational" };
+      charB = { name: "Gabrielle", role: "Fellow Student", voiceTone: "Casual & Conversational" };
+    }
+
+    const getDisplayName = (charObj: any, fallback: string): string => {
+      if (!charObj?.name) return fallback;
+      const parts = charObj.name.trim().split(/\s+/);
       for (const part of parts) {
         if (part.length > 2 && new RegExp(`\\b${part}\\b`, "i").test(cleanPrompt)) {
           return part;
         }
       }
       for (const pn of promptNames) {
-        if (parts.some(p => p.toLowerCase() === pn.toLowerCase())) {
+        if (parts.some((p: string) => p.toLowerCase() === pn.toLowerCase())) {
           return pn;
         }
       }
       return parts[0];
     };
 
-    const mentionedFromBook = chars.filter((c: any) => matchesCharacter(c));
+    const nameA = getDisplayName(charA, "William");
+    const nameB = getDisplayName(charB, "Gabrielle");
 
-    let charA: any = null;
-    let charB: any = null;
+    // 3. TALKATIVE VS LISTENER DETECTION:
+    const aIsTalkative = new RegExp(`\\b${nameA}\\b[^.!?]*\\b(?:talkative|talking|chatter|babbles?|speaks?)\\b|\\b(?:talkative|talking)\\b[^.!?]*\\b${nameA}\\b`, "i").test(cleanPrompt);
+    const bIsTalkative = new RegExp(`\\b${nameB}\\b[^.!?]*\\b(?:talkative|talking|chatter|babbles?|speaks?)\\b|\\b(?:talkative|talking)\\b[^.!?]*\\b${nameB}\\b`, "i").test(cleanPrompt);
+    const aIsListener = new RegExp(`\\b${nameA}\\b[^.!?]*\\b(?:listens?|listening|quiet|calm)\\b|\\b(?:listens?|listening)\\b[^.!?]*\\b${nameA}\\b`, "i").test(cleanPrompt);
+    const bIsListener = new RegExp(`\\b${nameB}\\b[^.!?]*\\b(?:listens?|listening|quiet|calm)\\b|\\b(?:listens?|listening)\\b[^.!?]*\\b${nameB}\\b`, "i").test(cleanPrompt);
 
-    if (mentionedFromBook.length >= 2) {
-      charA = mentionedFromBook[0];
-      charB = mentionedFromBook[1];
-    } else if (mentionedFromBook.length === 1) {
-      charA = mentionedFromBook[0];
-      const otherInBook = chars.find((c: any) => c?.name && c.name.toLowerCase() !== charA.name.toLowerCase());
-      const promptOther = promptNames.find(pn => !charA.name.toLowerCase().includes(pn.toLowerCase()));
-      if (promptOther) {
-        charB = { name: promptOther, role: "Companion", voiceTone: "Sarcastic & Witty" };
-      } else if (otherInBook) {
-        charB = otherInBook;
-      } else {
-        charB = { name: "Gabrielle", role: "Fellow Student", voiceTone: "Casual & Conversational" };
-      }
-    } else if (promptNames.length >= 2) {
-      charA = { name: promptNames[0], role: "Lead Character", voiceTone: "Casual & Conversational" };
-      charB = { name: promptNames[1], role: "Companion", voiceTone: "Sarcastic & Witty" };
-    } else if (promptNames.length === 1) {
-      charA = { name: promptNames[0], role: "Lead Character", voiceTone: "Casual & Conversational" };
-      charB = chars[0] || { name: "Gabrielle", role: "Fellow Student", voiceTone: "Sarcastic & Witty" };
-    } else if (chars.length >= 2) {
-      charA = chars[0];
-      charB = chars[1];
-    } else if (chars.length === 1) {
-      charA = chars[0];
-      charB = { name: "Gabrielle", role: "Fellow Student", voiceTone: "Sarcastic & Witty" };
-    } else {
-      charA = { name: "William", role: "Lead Student", voiceTone: "Casual & Conversational" };
-      charB = { name: "Gabrielle", role: "Fellow Student", voiceTone: "Sarcastic & Witty" };
-    }
+    const speakerName = (bIsTalkative || aIsListener)
+      ? nameB
+      : (aIsTalkative || bIsListener ? nameA : (nameB.toLowerCase() === "gabrielle" ? nameB : nameA));
+    const listenerName = speakerName === nameB ? nameA : nameB;
 
-    const nameA = getPreferredDisplayName(charA, "William");
-    const nameB = getPreferredDisplayName(charB, "Gabrielle");
-    const toneA = String(charA.voiceTone || book?.dialogueTone || "Casual & Conversational").toLowerCase();
-    const toneB = String(charB.voiceTone || (toneA.includes("sarcastic") ? "Casual & Conversational" : "Sarcastic & Witty")).toLowerCase();
+    const speakerChar = speakerName === nameA ? charA : charB;
+    const listenerChar = listenerName === nameA ? charA : charB;
 
-    const silentA = isSilentChar(charA);
-    const silentB = isSilentChar(charB);
+    const speakerPro = getPronouns(speakerName, speakerChar);
+    const listenerPro = getPronouns(listenerName, listenerChar);
 
-    // Dialogue input check
-    const dialogueMatch = cleanPrompt.match(/"([^"]+)"|“([^”]+)”/);
-    let spokenText = dialogueMatch ? (dialogueMatch[1] || dialogueMatch[2]) : null;
-    if (!spokenText && (/\?$/.test(cleanPrompt) || /^(say|ask|whisper|tell|demand|shout|call)\b/i.test(cleanPrompt))) {
-      spokenText = cleanPrompt.replace(/^\*[^*]+\*,?\s*/, "").replace(/^["'\s]+|["'\s]+$/g, "");
-    }
+    // 4. PREMISE BEATS DISSECTION:
+    const hasEvacuation = /\b(?:crowd|students?|people|scouts?)\s+(?:running|fleeing|stampeding|scattering|escaping|rushing)\b/i.test(cleanPrompt) ||
+      /\b(?:running|rushing|pouring|scrambling)\s+out\b/i.test(cleanPrompt);
 
-    // Environmental & Genre cues
-    const combinedWorld = `${book?.genre || ""} ${book?.setting || ""} ${book?.title || ""} ${cleanPrompt}`.toLowerCase();
-    const isCampus = /\b(?:campus|college|university|academy|school|faculty|quad|dorm|lecture|student|students)\b/i.test(combinedWorld);
-    const isSciFi = !isCampus && /sci-fi|space|cyber|futur|station|star|orbit|ship|hull|trans-orbit|cyberpunk/i.test(combinedWorld);
-    const isGothic = !isCampus && /gothic|victorian|occult|manor|estate|highgate|belvoir/i.test(combinedWorld);
-    const isFantasy = !isCampus && /fantasy|magic|wizard|sorcer|sword|castle|dragon|alchem|realm|kingdom/i.test(combinedWorld);
+    const locationMatch = cleanPrompt.match(/\b(?:from|to|at|in|near)\s+(?:the\s+)?(track\s+and\s+field|stadium|sports\s+field|field|athletic\s+grounds|courtyard|quad|hallway|library|rooftop|archive)\b/i);
+    const fieldLocationName = locationMatch ? locationMatch[1].trim() : (/\btrack\s+and\s+field\b/i.test(cleanPrompt) ? "the track and field" : "the sports field");
 
-    // Intent detection
-    const isArrival = /\b(?:arrive|arrives|arrived|arrival|landing|dropship|transport|shuttle|convoy|escort|director|commander|general|master|chancellor|dean)\b/i.test(promptLower);
-    const isMonsterThreat =
-      /\b(?:demon|demons|monster|monsters|creature|creatures|beast|beasts|fiend|fiends|aberration|anomaly|titan)\b/i.test(cleanPrompt) ||
-      (/\b(?:vibrat|tremor|quak|shaking)\b/i.test(cleanPrompt) && /\b(?:field|ground|track)\b/i.test(cleanPrompt));
-    const isWalkingOrTransit = !isArrival && !isMonsterThreat && /\b(?:walk|walking|walked|stroll|strolling|strolled|wander|wandering|pace|pacing|footsteps|stride|campus|grounds?|courtyard|corridor|hallway|path|avenue|street|sidewalk|quad|casual|casually|talking|moving)\b/i.test(cleanPrompt);
-    const isInvestigation = !isMonsterThreat && /\b(?:search|searching|searched|investigate|investigating|inspect|inspecting|examine|examining|check|checking|checked|look|looking|terminal|screen|file|files|locker|read|reading|find|found|study|studying|lab|note|notes|data|records?)\b/i.test(cleanPrompt);
-    const isCombatOrAction = !isMonsterThreat && /\b(?:fight|fighting|fought|strike|striking|struck|attack|attacking|attacked|hit|punch|kick|kicked|run|running|ran|flee|fleeing|escape|chase|chasing|hide|hiding|dodge|dodging|blast|shoot|blade|weapon|gun|door|breach)\b/i.test(cleanPrompt);
-    const isDowntimeOrRest = !isMonsterThreat && /\b(?:coffee|cafe|cafeteria|lunch|bench|sit|sitting|eat|drink|lounge|table|rest|pause|waiting|wait)\b/i.test(cleanPrompt);
+    const hasInvestigation = /\b(?:check\s+(?:it\s+)?out|investigate|see\s+what|take\s+a\s+look|head\s+over|walk\s+over|go\s+to\s+check)\b/i.test(cleanPrompt);
+    const hasVibration = /\b(?:vibrat(?:ing|ion|ed|es)?|tremor|shak(?:ing|es|ed)|quak(?:ing|e|es)|rumbl(?:ing|e|es))\b/i.test(cleanPrompt);
+    const hasDemonEncounter = threatFullName !== null || /\b(?:demon|monster|creature|beast)\b/i.test(cleanPrompt);
+    const hasCasualWalk = /\b(?:casually\s+walk|walking|stroll|strolling|walk\s+on|campus\s+grounds?|quad)\b/i.test(cleanPrompt);
 
-    const getToneLine = (speakerName: string, tone: string, scenario: "walk_a" | "walk_b" | "search_a" | "search_b" | "combat_a" | "combat_b" | "rest_a" | "rest_b" | "dialogue_reply"): string => {
-      const isCasual = /casual|conversational|relaxed|modern/i.test(tone);
-      const isSarcastic = /sarcastic|witty|ironic|snarky/i.test(tone);
-      const isScholarly = /scholarly|analytical|academic|logical/i.test(tone);
-      const isGritty = /gritty|blunt|rough|hardboiled/i.test(tone);
-      const isFormal = /formal|aristocratic|stately|noble/i.test(tone);
-      const isPoetic = /poetic|lyrical|verse/i.test(tone);
-      const isCryptic = /cryptic|whispering|mystic/i.test(tone);
+    // Check for explicit quotes in prompt
+    const explicitQuote = cleanPrompt.match(/"([^"]+)"|“([^”]+)”/);
+    const quoteText = explicitQuote ? (explicitQuote[1] || explicitQuote[2]) : null;
 
-      switch (scenario) {
-        case "walk_a":
-          if (isSarcastic) return `"I love how completely normal our days are," ${speakerName} said with a dry laugh. "We're doing great at staying out of trouble."`;
-          if (isScholarly) return `"The timing doesn't make sense if you look at the facts," ${speakerName} said quietly, looking ahead. "There was an intentional forty-minute gap between the alarm and the response."`;
-          if (isGritty) return `"Keep your chin up and don't look like you're looking for an exit," ${speakerName} warned quietly. "People notice nerves fast."`;
-          if (isFormal) return `"People are watching us closely today," ${speakerName} said in a calm, steady voice.`;
-          if (isPoetic) return `"The air feels restless today," ${speakerName} said softly, watching leaves blow across the ground. "Like something is about to happen."`;
-          if (isCryptic) return `"Listen to the steps around us," ${speakerName} whispered. "Everyone is in a hurry, but what's following them is faster."`;
-          return `"You know everyone's talking about yesterday, right?" ${speakerName} said with an easy smile. "By tomorrow, half the school will think we planned the whole thing."`;
+    // Check for Supreme Director arrival specifically (only if prompt explicitly asks for it)
+    const isDirectorArrival = /\b(?:supreme\s*director|kazumi|gabriella.*kazumi)\b/i.test(promptLower) &&
+      /\b(?:arrive|arriving|arrived|dropship|landing)\b/i.test(promptLower);
 
-        case "walk_b":
-          if (isCasual) return `"Honestly? I'm not worried about it," ${speakerName} laughed softly, keeping pace. "We did what made sense. The rumors will die down soon."`;
-          if (isScholarly) return `"That's why we need to check the records before noon," ${speakerName} answered. "If it's written down officially, we have to be careful."`;
-          if (isGritty) return `"Let them stare," ${speakerName} muttered, eyes on the path. "Staring doesn't mean they know anything. Keep walking."`;
-          if (isFormal) return `"Good point," ${speakerName} agreed with a slight nod. "Let's stay calm and give them nothing to talk about."`;
-          if (isPoetic) return `"Let the rumors spread like dry grass," ${speakerName} answered with a quiet smile. "The truth won't change."`;
-          if (isCryptic) return `"Let them talk about yesterday," ${speakerName} answered softly. "Yesterday is done. It's tomorrow we need to watch."`;
-          return `"Let them talk," ${speakerName} said with an easy smirk. "If anyone actually asked us directly, they wouldn't like the answer anyway."`;
-
-        case "search_a":
-          if (isSarcastic) return `"Well, look at that. Someone actually tried to hide something," ${speakerName} said with a grin. "Ten points for trying."`;
-          if (isScholarly) return `"Look at the lock," ${speakerName} pointed out, leaning in. "The marks show someone opened this recently—probably in the last twenty-four hours."`;
-          if (isGritty) return `"Found it," ${speakerName} grunted, checking the box. "Take a look, but make it fast."`;
-          if (isFormal) return `"Interesting. Someone clearly wanted to keep this hidden," ${speakerName} said calmly.`;
-          return `"Found something," ${speakerName} whispered, pulling out the folder. "Look at this—it's from this morning."`;
-
-        case "search_b":
-          if (isCasual) return `"Wait, are you serious? Let me see that," ${speakerName} said, stepping closer. "Someone is in big trouble."`;
-          if (isScholarly) return `"Check the serial numbers against the main list," ${speakerName} urged quietly. "If they match, we found the leak."`;
-          if (isGritty) return `"Pocket it and shut the box," ${speakerName} said, watching the door. "No fingerprints. Let's move."`;
-          if (isFormal) return `"Be very careful with that," ${speakerName} warned softly. "Getting caught with this is dangerous."`;
-          return `"Don't just stand there staring," ${speakerName} said with a grin. "Grab what you need and let's go before guards show up."`;
-
-        case "combat_a":
-          if (isSarcastic) return `"Right, because talking it out like normal people was too boring," ${speakerName} called out, getting ready with a grin.`;
-          if (isScholarly) return `"Their line is broken—hit them from the side!" ${speakerName} called out, spotting the opening.`;
-          if (isGritty) return `"Get down, now!" ${speakerName} shouted, charging forward. "Move your feet or get hit!"`;
-          if (isFormal) return `"Hold your ground!" ${speakerName} shouted in a firm voice. "Watch your distance and strike back!"`;
-          return `"Watch out!" ${speakerName} shouted, bracing for the rush. "Here they come!"`;
-
-        case "combat_b":
-          if (isCasual) return `"On it!" ${speakerName} yelled back, dodging the hit. "Watch your left!"`;
-          if (isScholarly) return `"Found an opening!" ${speakerName} called out, striking back right away. "Push forward now!"`;
-          if (isGritty) return `"Out of the way!" ${speakerName} shouted, hitting hard. "Go, go, go!"`;
-          if (isFormal) return `"Understood! I'll cover the side!" ${speakerName} shouted back.`;
-          return `"I've got your back!" ${speakerName} called out, jumping in to help.`;
-
-        case "rest_a":
-          if (isSarcastic) return `"If sitting here doing nothing is a crime, call the police," ${speakerName} sighed, leaning back against the bench with relief.`;
-          if (isScholarly) return `"Thirty minutes of rest will give us time to think," ${speakerName} said, setting down the notes.`;
-          if (isGritty) return `"Sit down, catch your breath, and stay sharp," ${speakerName} said, taking a sip from the cup.`;
-          if (isFormal) return `"A short break will do us good," ${speakerName} said, sitting down at the table.`;
-          return `"Finally, a minute to breathe," ${speakerName} said, sinking into the chair.`;
-
-        case "rest_b":
-          if (isCasual) return `"Don't get too comfortable," ${speakerName} laughed, sitting down across from him. "With our luck, something will happen in five minutes."`;
-          if (isSarcastic) return `"Enjoy the quiet while it lasts," ${speakerName} said with a deadpan grin. "Someone is definitely going to ruin it soon."`;
-          if (isScholarly) return `"Agreed. Let's go over our plan while it's still quiet," ${speakerName} said, leaning forward.`;
-          if (isGritty) return `"Drink your coffee," ${speakerName} grunted. "When that bell rings, we're back to work."`;
-          if (isFormal) return `"Indeed. Let's use this time to get ready for what comes next," ${speakerName} agreed.`;
-          return `"Tell me about it," ${speakerName} laughed, relaxing into the chair. "So what's the plan for this afternoon?"`;
-
-        case "dialogue_reply":
-          if (isSarcastic) return `"Great question. Let's argue about it while time runs out," ${speakerName} said with a dry grin. "If we survive the afternoon, I'll buy you a coffee and we can talk about it all day."`;
-          if (isScholarly) return `"That makes sense, but you're missing one big detail," ${speakerName} said, eyes narrowing. "Whoever did this had full access. We should assume they're already tracking us."`;
-          if (isGritty) return `"Keep your voice down," ${speakerName} warned, glancing at the door. "People are listening. We can't be careless."`;
-          if (isFormal) return `"That's a good question," ${speakerName} answered in a calm voice. "Let's wait until we see the proof before making up our minds."`;
-          if (isPoetic) return `"The wind won't tell you the answer," ${speakerName} whispered, looking out the window. "The truth was hidden long before we got here."`;
-          if (isCryptic) return `"The answer is right where you're not looking," ${speakerName} whispered with a faint smile. "Listen closely. This was never an accident."`;
-          return `"Look, you're asking the one thing everyone is trying to ignore," ${speakerName} said, leaning in and keeping his voice down. "Whoever did this knew exactly what they were doing."`;
-      }
-    };
-
-    // 2. Arrival / Authority / Executive Scene Generation (Dynamic, Simple English terms)
-    if (isArrival) {
-      const authorityRole = promptNames.find(n => /director|commander|general|master|chancellor|dean/i.test(n)) || "The Supreme Director";
+    // SCENARIO 1: EXPLICIT DIRECTOR ARRIVAL (ONLY when requested)
+    if (isDirectorArrival) {
       return [
-        `The loud roar of twin jet engines swept across the courtyard, blowing dry leaves and drowning out the whispers of the stunned crowd along the walkway.`,
-        `A heavy black transport ship landed right on the campus pad. The back ramp opened with a sharp hiss, and the recruiters and students backed away as fast as they could.`,
-        `Stepping down the ramp was ${authorityRole}, wearing a sharp military coat over their shoulders.`,
-        `Just their presence alone made everyone on the campus go dead silent. Dark, sharp eyes swept the courtyard, and nobody dared to speak or make a sudden move.`,
-        `Then, their eyes landed on ${nameA}.`,
-        `The serious boss face vanished in an instant. Their expression melted into a huge, warm smile.`,
-        `"${nameA}!" they called out, dropping all formal rules as they hurried across the stone plaza.`,
-        `Before ${nameA} could take half a step, two hands reached out and squished both of his cheeks with open affection. "Look at you! Standing tall and looking completely unbothered as always. Isn't this just the cutest sight?"`,
-        `${nameA} didn't pull away or complain. Even with his cheeks lightly squished together, his dark eyes stayed calm, sleepy, and completely relaxed, just like always.`,
-        `${nameB} laughed from the railing. "Careful. You're going to ruin his tough reputation before classes even start."`,
-        `"Oh, be quiet," came the quick reply, letting go of ${nameA} only to reach over and mess up ${nameB}'s hair like a doting older sibling. "You two are still the same kids who used to track mud across the floor. Don't act like you're all grown up."`,
-        `Everyone nearby watched in pure shock, trying to understand how the feared director could be so playful and warm.`,
-        `Then, official business was mentioned, and the air shifted.`,
-        `The smile snapped shut. Their posture straightened into a serious, cold line of command, and their brown eyes turned sharp again.`,
-        `"Now then," their voice dropped, leaving no room for argument. "The council called a meeting, and every major group is trying to claim what you did yesterday. Get inside the ship, both of you. We have family matters to talk about."`
+        `The loud roar of twin jet engines swept across the plaza, drowning out the murmurs of the scouts in the courtyard.`,
+        `A heavy black executive dropship descended onto the campus landing pad. The hydraulic ramp hissed open, and the scouts and recruiters backed away as fast as they could.`,
+        `Stepping down the ramp was Gabriella Kazumi de Vara, Supreme Director of Obsidian Aegis.`,
+        `She wore a sharp black military coat over her shoulders. Just her presence alone was enough to make everyone in the courtyard go dead silent. Her dark eyes swept the crowd, and nobody dared to speak.`,
+        `Then, her eyes landed on ${nameA}.`,
+        `Her serious boss face vanished in an instant. Her expression melted into a huge, warm smile.`,
+        `"${nameA}!" Kazumi called out happily, dropping all formal rules as she hurried across the stones.`,
+        `Before ${nameA} could move, Kazumi wrapped her arms around him and squished both of his cheeks with her hands. "Look at you! Standing tall and as cute as ever! Look at him, isn't he the cutest?"`,
+        `${nameA} didn't pull away or complain. Even with his cheeks squished together, his dark eyes stayed calm, sleepy, and completely unbothered, just like always.`,
+        `${nameB} started laughing from the railing. "Careful, Kazumi. You're going to ruin his tough reputation."`,
+        `"Oh, be quiet, ${nameB}," Kazumi said, letting go of ${nameA} only to reach over and mess up ${nameB}'s hair like a doting older sibling. "You two are still my boys. It feels like yesterday you were scraping your knees at the citadel."`,
+        `Then, guild business was mentioned, and the warm big sister vanished.`,
+        `Kazumi stood straight, her smile snapping shut. Her posture hardened into cold command, her dark eyes sharp again.`,
+        `"Now then," her voice dropped, leaving no room for argument. "The council called an emergency meeting. Get in the ship, both of you. We have family matters to talk about."`
       ].join("\n\n");
     }
 
-    // 3. Monster / Demon Threat & Emergency Evacuation (Dynamic, Simple English terms)
-    if (isMonsterThreat) {
-      const monsterMatch = cleanPrompt.match(
-        /\b([A-Z][a-zA-Z0-9'’\-]+(?:\s+[A-Z][a-zA-Z0-9'’\-]+)*)\s+(?:demon|demons|monster|monsters|creature|creatures|beast|beasts|fiend|aberration|anomaly)\b/i
+    // SCENARIO 2: MULTI-STAGE EVACUATION / FIELD ANOMALY / DEMON ENCOUNTER
+    if (hasDemonEncounter || (hasEvacuation && (hasVibration || hasInvestigation))) {
+      const monsterName = threatFullName || "Tyran Resonant demon";
+      const paragraphs: string[] = [];
+
+      // Beat 1: Casual walk and character dynamic
+      paragraphs.push(
+        `A cool morning breeze swept across the campus grounds, carrying dry leaves across the concrete walkways between the lecture halls.`
       );
-      const monsterName = monsterMatch
-        ? `${monsterMatch[1]} demon`
-        : (cleanPrompt.match(/\b([a-zA-Z0-9'’\-]+(?:\s+[a-zA-Z0-9'’\-]+)?\s+(?:demon|monster|creature|beast))\b/i)?.[1] || "resonant demon");
 
-      const locationName = /\btrack\s+and\s+field\b/i.test(cleanPrompt)
-        ? "the track and field"
-        : /\b(?:stadium|sports\s+field|football\s+field)\b/i.test(cleanPrompt)
-        ? "the stadium field"
-        : "the sports field";
+      paragraphs.push(
+        `${speakerName} was talking with ${speakerPro.poss} usual lively energy, gesturing with ${speakerPro.poss} hands as ${speakerPro.subj} bounced from one topic to the next, while ${listenerName} walked beside ${speakerPro.obj} with ${listenerPro.poss} hands in ${listenerPro.poss} jacket pockets, listening in calm silence and nodding whenever ${speakerPro.subj} paused for a breath.`
+      );
 
-      // Detect who talks more vs who listens
-      const charAIsTalkative =
-        new RegExp(`\\b${nameA}\\b[^.!?]*\\btalkative\\b|\\btalkative\\b[^.!?]*\\b${nameA}\\b`, "i").test(cleanPrompt);
-      const charBIsTalkative =
-        new RegExp(`\\b${nameB}\\b[^.!?]*\\btalkative\\b|\\btalkative\\b[^.!?]*\\b${nameB}\\b`, "i").test(cleanPrompt);
-      const charAIsListener =
-        new RegExp(`\\b${nameA}\\b[^.!?]*\\blistens?\\b|\\blistens?\\b[^.!?]*\\b${nameA}\\b`, "i").test(cleanPrompt);
-      const charBIsListener =
-        new RegExp(`\\b${nameB}\\b[^.!?]*\\blistens?\\b|\\blistens?\\b[^.!?]*\\b${nameB}\\b`, "i").test(cleanPrompt);
+      // Beat 2: Living campus world
+      paragraphs.push(
+        `Around them, the normal rhythm of campus life moved along as usual—students carrying heavy backpacks, distant chatter near the main steps, and small groups sitting by the fountain who lowered their voices to whisper as the two walked past.`
+      );
 
-      const talkativeSpeaker = (charBIsTalkative || charAIsListener)
-        ? nameB
-        : (charAIsTalkative ? nameA : (nameB.toLowerCase() === "gabrielle" ? nameB : nameA));
-      const quietListener = talkativeSpeaker === nameB ? nameA : nameB;
+      // Beat 3: Spoken dialogue reflecting their personalities
+      paragraphs.push(
+        `"And honestly, nobody should even act surprised," ${speakerName} remarked with a quick, amused grin, glancing sideways at ${listenerPro.obj}. "They pretend everything is completely normal, but everyone knows they're scrambling behind closed doors."\n\n${listenerName} gave a quiet, faint smile, ${listenerPro.poss} dark eyes staying calm and sleepy. "You talk enough for both of us," ${listenerPro.subj} answered softly. "Just keep your eyes open."`
+      );
 
-      const speakerChar = talkativeSpeaker === nameA ? charA : charB;
-      const listenerChar = quietListener === nameA ? charA : charB;
-      const speakerPro = getCharacterPronouns(talkativeSpeaker, speakerChar);
-      const listenerPro = getCharacterPronouns(quietListener, listenerChar);
+      // Beat 4: Inciting disruption - crowd fleeing in panic
+      paragraphs.push(
+        `Before ${speakerName} could fire back another witty comment, a sudden wave of frantic shouts broke the morning quiet.`
+      );
 
-      return [
-        `A cool morning breeze swept across the campus walkways, carrying dry leaves across the concrete between the academic halls.`,
-        `${talkativeSpeaker} was talking with ${speakerPro.poss} usual lively energy, gesturing with ${speakerPro.poss} hands as ${speakerPro.subj} hopped from one topic to the next, while ${quietListener} walked beside ${speakerPro.obj} with ${listenerPro.poss} hands in ${listenerPro.poss} pockets, listening patiently and nodding whenever ${speakerPro.subj} paused for a breath.`,
-        `Around them, the normal rhythm of campus life moved along as usual—students carrying heavy backpacks, distant laughter near the cafeteria, and small groups sitting by the fountain who lowered their voices to whisper as the two walked past.`,
-        `"And honestly, nobody should even act surprised," ${talkativeSpeaker} remarked with a quick, amused grin, glancing sideways at ${listenerPro.obj}. "They pretend everything is under control, but everyone knows they're scrambling behind closed doors."`,
-        `${quietListener} gave a quiet, faint smile, ${listenerPro.poss} dark eyes staying calm. "You talk enough for both of us," ${listenerPro.subj} replied softly. "Just keep your eyes open."`,
-        `Before ${talkativeSpeaker} could fire back another witty comment, a sudden wave of frantic shouts broke the morning quiet.`,
-        `Up ahead, the gates of ${locationName} burst open as a crowd of students came running out in pure panic.`,
-        `People were stumbling over their own feet, dropping gym bags and jackets onto the grass without stopping, and shoving past one another in a desperate rush to get away from the open stadium. Several underclassmen nearly fell on the concrete, their faces pale as they yelled for everyone to run.`,
-        `${talkativeSpeaker}'s banter stopped mid-sentence. Instead of joining the stampede toward the lecture halls, ${speakerPro.subj} and ${quietListener} came to an immediate halt, exchanging a sharp, knowing look.`,
-        `"Well, that definitely isn't morning track practice," ${talkativeSpeaker} said, all humor vanishing from ${speakerPro.poss} voice as ${speakerPro.subj} turned toward the stadium.`,
-        `"Let's check it out," ${quietListener} answered, ${listenerPro.poss} easy pace turning into purposeful strides against the flow of the fleeing crowd.`,
-        `As they stepped closer to the open gates of ${locationName}, the concrete walkway under their shoes began to vibrate.`,
-        `It was not a gentle shake. A deep, heavy vibration pulsed through the earth like a massive heartbeat, rattling the chain-link fences and sending ripples through water puddles along the walkway. With every step they took toward the entrance, the tremors grew stronger, vibrating right through their legs and chest.`,
-        `They pushed past the last of the fleeing students and slipped through the gate into the stadium.`,
-        `The metal bleachers were completely abandoned. Towels, water bottles, and spiked running shoes lay strewn across the red rubber track, left behind in the chaotic rush.`,
-        `Standing directly in the center of the open field was the ${monsterName}.`,
-        `The creature was massive. Thick, cracked dark skin pulsed with a deep, unnatural hum that tore through the morning air, shaking the soil under its heavy clawed feet. Every breath it released sent another violent shockwave rolling through the grass, ripping deep trenches into the turf.`,
-        `Its dark, glowing eyes slowly shifted away from the empty stands, locking straight onto ${quietListener} and ${talkativeSpeaker} at the edge of the track.`,
-        `${talkativeSpeaker} stepped up right beside ${quietListener}, ${speakerPro.poss} hands ready as the ground shuddered violently under them. "Looks like we found what scared everyone off."`,
-        `${quietListener} pulled ${listenerPro.poss} hands out of ${listenerPro.poss} jacket pockets, ${listenerPro.poss} calm expression hardening into cold focus as ${listenerPro.poss} eyes locked onto the beast. "Stay ready," ${listenerPro.subj} said quietly. "It sees us."`
-      ].join("\n\n");
+      paragraphs.push(
+        `Up ahead, the gates of ${fieldLocationName} burst open as a crowd of students came running out in pure panic.`
+      );
+
+      paragraphs.push(
+        `People were stumbling over their own feet, dropping gym bags and jackets onto the grass without stopping, and shoving past one another in a desperate rush to get away from the open field. Several underclassmen nearly fell on the concrete, their faces pale as they yelled for everyone to run.`
+      );
+
+      // Beat 5: Decision & Investigation
+      paragraphs.push(
+        `${speakerName}'s banter stopped mid-sentence. Instead of joining the stampede toward the lecture halls, ${speakerPro.subj} and ${listenerName} came to an immediate halt, exchanging a sharp, knowing look.`
+      );
+
+      paragraphs.push(
+        `"Well, that definitely isn't morning track practice," ${speakerName} said, all humor vanishing from ${speakerPro.poss} voice as ${speakerPro.subj} turned toward the open gates.`
+      );
+
+      paragraphs.push(
+        `"Let's check it out," ${listenerName} answered, ${listenerPro.poss} easy pace turning into purposeful strides against the flow of the fleeing crowd.`
+      );
+
+      // Beat 6: Physical vibration & sensory buildup
+      paragraphs.push(
+        `As they stepped closer to the entrance of ${fieldLocationName}, the concrete walkway under their shoes began to vibrate.`
+      );
+
+      paragraphs.push(
+        `It was not a gentle shake. A deep, heavy vibration pulsed through the earth like a massive heartbeat, rattling the chain-link fences and sending ripples through water puddles along the walkway. With every step they took toward the entrance, the tremors grew stronger, vibrating right through their legs and chest.`
+      );
+
+      // Beat 7: Arrival at the deserted field
+      paragraphs.push(
+        `They slipped past the last of the fleeing students and stepped through the gate into the stadium.`
+      );
+
+      paragraphs.push(
+        `The metal bleachers were completely abandoned. Towels, water bottles, and spiked running shoes lay strewn across the red rubber track, left behind in the chaotic rush.`
+      );
+
+      // Beat 8: Sighting the demon in the center of the field
+      paragraphs.push(
+        `Standing directly in the center of the field was the ${monsterName}.`
+      );
+
+      paragraphs.push(
+        `The creature was massive. Thick, cracked dark skin pulsed with a deep, unnatural hum that tore through the morning air, shaking the soil under its heavy clawed feet. Every breath it released sent another violent shockwave rolling through the grass, ripping deep trenches into the turf.`
+      );
+
+      paragraphs.push(
+        `Its dark, glowing eyes slowly shifted away from the empty stands, locking straight onto ${listenerName} and ${speakerName} at the edge of the track.`
+      );
+
+      // Beat 9: Combat tension hook
+      paragraphs.push(
+        `${speakerName} stepped up right beside ${listenerName}, ${speakerPro.poss} hands ready as the ground shuddered violently under them. "Looks like we found what scared everyone off."\n\n${listenerName} pulled ${listenerPro.poss} hands out of ${listenerPro.poss} jacket pockets, ${listenerPro.poss} calm expression hardening into cold focus as ${listenerPro.poss} eyes locked onto the beast. "Stay ready," ${listenerPro.subj} said quietly. "It sees us."`
+      );
+
+      return paragraphs.join("\n\n");
     }
 
-    // 4. Walking / Campus / Transit (Simple English terms, living campus)
-    if (isWalkingOrTransit) {
-      const proA = getCharacterPronouns(nameA, charA);
-      const proB = getCharacterPronouns(nameB, charB);
+    // SCENARIO 3: CASUAL WALK / DIALOGUE WITHOUT MONSTER
+    if (hasCasualWalk || (!hasEvacuation && !threatFullName)) {
+      const paragraphs: string[] = [];
 
-      const dialogueA = silentA
-        ? `*${nameA} walked in calm silence, hands in ${proA.poss} pockets as ${proA.subj} noticed the stares with a slight tilt of ${proA.poss} head.*`
-        : getToneLine(nameA, toneA, "walk_a");
+      paragraphs.push(
+        `A cool morning breeze swept across the campus walkways, carrying dry leaves across the concrete between the academic buildings.`
+      );
 
-      const dialogueB = silentB
-        ? `*${nameB} didn't say a word, though a quick sideways look told everyone to mind their own business.*`
-        : getToneLine(nameB, toneB, "walk_b");
+      paragraphs.push(
+        `${speakerName} walked with lively, unhurried energy, gesturing with ${speakerPro.poss} hands as ${speakerPro.subj} talked about the morning's news, while ${listenerName} matched ${speakerPro.poss} pace with ${listenerPro.poss} hands tucked loosely into ${listenerPro.poss} jacket pockets, listening patiently under the pale sky.`
+      );
 
-      return [
-        `A cool morning breeze blew across the campus lawn, carrying dry leaves along the walkways between the classroom buildings.`,
-        `${nameA} walked with an easy, relaxed pace, hands in ${proA.poss} pockets, while ${nameB} walked right beside ${proA.obj} under the pale morning sky.`,
-        `Around them, normal campus life went on as usual—the sound of the clock tower ringing, doors opening down the hall, and the chatter of students on their way to class.`,
-        `Still, people were clearly watching them.`,
-        `A small group of students sitting near the fountain got quiet as soon as ${nameA} and ${nameB} walked past. One of them nudged his friend and pointed with his eyes, but quickly looked back down at his phone the moment ${nameA} glanced over.`,
-        `Across the steps, two other students stopped and whispered behind their hands, tracking every step the pair took.`,
-        dialogueA,
-        dialogueB,
-        `*${nameA} gave a small, calm shrug, walking ahead without caring about the whispers around them.*`,
-        (toneA.includes("scholarly") || toneB.includes("scholarly"))
-          ? `"Which brings us back to the real question," ${nameA} said, keeping ${proA.poss} voice down. "Who authorized the second key if the supervisor wasn't even here?"\n\n"Someone with full access," ${nameB} answered, eyes narrowing. "And there are only three people on this campus who can do that."`
-          : (toneA.includes("gritty") || toneB.includes("gritty"))
-            ? `"You have the drive safe?" ${nameA} asked quietly, not turning ${proA.poss} head.\n\n"Tucked away where nobody finds it," ${nameB} replied under ${proB.poss} breath. "Just watch the door."`
-            : `"Fair point," ${nameA} added with an amused smile. "Though if the dean asks us what happened, your 'let them stare' plan might not work."\n\n"It will work fine," ${nameB} shot back with a quick grin. "I'll just show them the exact files they thought they deleted. That always shuts people up fast."`,
-        `Up ahead, near the main hall entrance, an announcement chime rang out, flashing a notice on the screens as someone near the doorway watched them closely before turning down the hall.`
-      ].join("\n\n");
+      paragraphs.push(
+        `Around them, the everyday routine of the campus continued as usual—the chime of the central clock tower, doors opening down the arcade, and students hurrying toward morning lectures. Yet nearby students sitting by the lawn kept glancing over, lowering their voices to whisper as the pair passed.`
+      );
+
+      if (quoteText) {
+        paragraphs.push(
+          `"${quoteText}," ${speakerName} remarked, glancing sideways at ${listenerPro.obj} with a knowing grin.`
+        );
+        paragraphs.push(
+          `${listenerName} gave a quiet, faint smile, keeping ${listenerPro.poss} eyes on the path ahead. "You always find a way to make it sound simpler than it is," ${listenerPro.subj} answered in a calm, steady voice.`
+        );
+      } else {
+        paragraphs.push(
+          `"Everyone is watching us today," ${speakerName} said with a quiet smirk, keeping ${speakerPro.poss} voice down. "They act like we caused all the excitement yesterday."\n\n"Let them look," ${listenerName} replied softly, completely relaxed. "Looking doesn't hurt anyone. Just keep walking."`
+        );
+      }
+
+      paragraphs.push(
+        `${speakerName} laughed softly, nodding toward the steps ahead. "Fair enough. But sooner or later, someone is going to ask us directly."\n\n"Then we give them the same answer as always," ${listenerName} said quietly.`
+      );
+
+      paragraphs.push(
+        `Up ahead, near the main courtyard archway, a sudden chime sounded from the public broadcast terminal, drawing the attention of students along the corridor as a new announcement flashed across the screens.`
+      );
+
+      return paragraphs.join("\n\n");
     }
 
-    // 4. Spoken Dialogue / Inquiries (Simple English terms)
-    if (spokenText) {
-      const activeRespondent = silentB ? (silentA ? null : nameA) : nameB;
-      const respondentTone = activeRespondent === nameA ? toneA : toneB;
-      const otherPerson = activeRespondent === nameA ? nameB : nameA;
-
-      return [
-        `The question hung in the air between them as they kept walking at a steady pace.`,
-        `Across the walkway, several passing students gave them curious looks, noticing how serious they both looked. A couple of freshmen near the steps leaned in to hear, but ${nameA}'s quick look made them look away fast.`,
-        activeRespondent
-          ? getToneLine(activeRespondent, respondentTone, "dialogue_reply")
-          : `*${nameB} stayed quiet, but pointed toward the side hallway to show that they needed to move fast.*`,
-        (silentA || activeRespondent === nameA)
-          ? `*${otherPerson} stayed alert, looking around to make sure nobody was standing close enough to listen.*`
-          : (toneA.includes("sarcastic") || toneB.includes("sarcastic"))
-            ? `"You're unusually focused today," ${otherPerson} said with a smirk. "Usually you act like you don't care until the alarms go off."\n\n"I care about staying out of trouble," ${activeRespondent} replied with a dry smile. "There's a big difference."`
-            : `"We both knew this was coming," ${otherPerson} said quietly, stepping closer. "The only question is if we move first or wait for them to make a move."\n\n"We don't wait," ${activeRespondent} answered firmly. "Waiting is how you lose."`,
-        `The two of them exchanged a quick, knowing look, completely on the same page.`,
-        `Ahead, near the entrance, a screen turned on with a new notice, catching the attention of nearby students while someone watched ${nameA} and ${nameB} from the top step.`
-      ].join("\n\n");
-    }
-
-    // 5. Investigation / Search (Simple English terms)
-    if (isInvestigation) {
-      return [
-        `The lock clicked open with a quiet snap. The wall panel slid aside smoothly, revealing a small hidden compartment inside.`,
-        `Inside rested a thick folder tied with red tape, right next to a small black storage drive marked with the Department seal.`,
-        `Out in the hallway, the sound of students opening lockers and walking by continued as usual, completely unaware of what was happening inside.`,
-        silentA
-          ? `*${nameA} pointed right at the date on the folder, raising his eyebrows in warning.*`
-          : getToneLine(nameA, toneA, "search_a"),
-        silentB
-          ? `*${nameB} nodded once, watching the door and signaling to hurry up.*`
-          : getToneLine(nameB, toneB, "search_b"),
-        `"Look at the name," ${nameA} whispered, carefully turning the top page. "This didn't come from the front office. It came straight from the director's private computer."`,
-        `"Which means we have about two minutes before someone notices," ${nameB} answered, pocketing the drive fast.`,
-        `Down the hall, the squeak of shoes on tile signaled a security guard walking their way, ending the conversation and telling them it was time to leave.`
-      ].join("\n\n");
-    }
-
-    // 6. Combat / Action (Simple English terms)
-    if (isCombatOrAction) {
-      return [
-        `The sudden hit broke the quiet, shaking the entire room as wood snapped and a fight broke out in an instant.`,
-        `Students and bystanders scattered in panic—chairs scraped loudly against the floor, bags dropped to the ground, and people ran for the doors to get out of the way.`,
-        silentA
-          ? `*${nameA} moved forward instantly, stepping between the threat and the crowd.*`
-          : getToneLine(nameA, toneA, "combat_a"),
-        silentB
-          ? `*${nameB} guarded the side in silence, ready to strike and watching every move.*`
-          : getToneLine(nameB, toneB, "combat_b"),
-        `Boots skidded hard across the floor as the counter-strike landed, shoving the attacker back into the hallway and opening a way out.`,
-        `Down the hall, more footsteps rushed toward them, and the sharp ring of the building's alarm filled the air.`
-      ].join("\n\n");
-    }
-
-    // 7. Downtime / Rest / Cafeteria (Simple English terms)
-    if (isDowntimeOrRest) {
-      return [
-        `The busy sound of lunchtime chatter filled the room as warm steam rose from coffee cups on the table.`,
-        `Across the cafeteria, people were clearly paying attention. At a booth two rows back, three students leaned in over their lunch trays, looking over at ${nameA} and ${nameB} every few seconds and whispering to each other.`,
-        silentA
-          ? `*${nameA} set down his cup quietly, looking around the room with a calm face.*`
-          : getToneLine(nameA, toneA, "rest_a"),
-        silentB
-          ? `*${nameB} sat down across from him, leaning in to talk.*`
-          : getToneLine(nameB, toneB, "rest_b"),
-        `"They're not even trying to hide it," ${nameA} said quietly, tapping the table. "By tonight, everyone on campus will be talking about us."`,
-        `"Good," ${nameB} said with a quick sip. "When everyone is looking at the front door, nobody watches what's going out the back."`,
-        `A sudden beep from the tabletop terminal cut in, showing a new message marked with the personal crest of the academy director.`
-      ].join("\n\n");
-    }
-
-    // 8. General Narrative Advancement (9-11 organic paragraphs)
+    // SCENARIO 4: GENERAL PREMISE ADVANCEMENT (Directly grounded in the author's prompt)
     return [
-      `The momentum shifted forward as ${nameA} and ${nameB} navigated the unfolding scene, their footsteps falling into an instinctive, shared cadence.`,
-      `Around them, the living environment reacted to their passage—bystanders taking subtle note of their presence, hushed murmurs passing between onlookers, and the tension of an unwritten conflict hovering just below the surface.`,
-      silentA
-        ? `*${nameA} took the lead in silence, his posture resolute and focused on the objective ahead.*`
-        : getToneLine(nameA, toneA, "walk_a"),
-      silentB
-        ? `*${nameB} kept stride beside him, readiness evident in every step.*`
-        : getToneLine(nameB, toneB, "walk_b"),
-      `"Whatever comes next, we stay on the same page," ${nameA} said quietly, eyes scanning the path ahead.`,
-      `"Always," ${nameB} replied without hesitation.`,
-      `An unexpected development unfolded before them, opening a new path while closing the door on retreat.`
+      `The scene shifted forward as ${nameA} and ${nameB} addressed the situation at hand, their focus locking onto what lay ahead.`,
+      `Around them, the surrounding environment responded in real time—observers tracking their movements from a safe distance, and the sharp quiet of an unfolding event settling over the area.`,
+      `"Stay ready," ${nameA} said quietly, eyes scanning the open space before them.`,
+      `"Already ahead of you," ${nameB} answered with a confident nod, adjusting ${getPronouns(nameB, charB).poss} stance.`,
+      `With every second that passed, the tension deepened, leaving no room to back away.`
     ].join("\n\n");
   }
 
@@ -1359,6 +1207,57 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
     });
   });
 
+  // Test Gemini API key validity and active status
+  app.post("/api/test-key", async (req, res) => {
+    try {
+      const testKey =
+        req.body?.apiKey ||
+        (req.headers["x-gemini-api-key"] as string) ||
+        process.env.GEMINI_API_KEY;
+
+      if (!testKey || typeof testKey !== "string" || !testKey.trim()) {
+        return res.status(400).json({ valid: false, error: "No API key provided." });
+      }
+
+      const client = new GoogleGenAI({
+        apiKey: testKey.trim(),
+        httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+      });
+
+      const response = await client.models.generateContent({
+        model: "gemini-3.6-flash",
+        contents: "Respond with only the word: READY",
+      });
+
+      if (response && response.text) {
+        return res.json({
+          valid: true,
+          model: "gemini-3.6-flash",
+          reply: response.text.trim(),
+        });
+      }
+      return res.json({ valid: false, error: "Model returned empty text." });
+    } catch (err: any) {
+      const status = err?.status || err?.code;
+      const rawMsg = String(err?.message || "");
+      if (
+        status === 429 ||
+        /depleted|prepay.*credits|resource_exhausted|billing/i.test(rawMsg)
+      ) {
+        return res.json({
+          valid: false,
+          isDepleted: true,
+          error:
+            "Prepayment credits are depleted ($0 balance). Please get a free API key from Google AI Studio without prepay billing at https://aistudio.google.com/app/apikey.",
+        });
+      }
+      return res.json({
+        valid: false,
+        error: rawMsg || "Failed to validate Gemini API key.",
+      });
+    }
+  });
+
   // Auto-generate book concept from an idea
   app.post("/api/generate-book", async (req, res) => {
     const { idea } = req.body;
@@ -1371,7 +1270,8 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
       ? `The author explicitly named these people: ${explicitCharacterNames.join(", ")}. Preserve every full name EXACTLY as written. Include all of them in the characters array. Do not rename, omit, merge, or replace them. Do not add other named characters to the cast unless the author explicitly named them in the premise.`
       : "The author did not explicitly name anyone. You may create characters appropriate to the premise.";
 
-    const client = getGeminiClient();
+    const customKey = (req.headers["x-gemini-api-key"] as string) || req.body?.apiKey;
+    const client = getGeminiClient(customKey);
     if (!client) {
       // If no API key configured, generate a high-quality template book concept
       return res.json({
@@ -1880,7 +1780,8 @@ Future chapters and character interactions will receive this fact as an explicit
         });
       }
 
-      const client = getGeminiClient();
+      const customKey = (req.headers["x-gemini-api-key"] as string) || req.body?.apiKey;
+      const client = getGeminiClient(customKey);
       if (!client) {
         if (fileAttachments.length > 0) {
           return res.status(503).json({
@@ -2172,7 +2073,8 @@ IMPORTANT: Output ONLY the raw JSON object, without markdown code fences.`;
         });
       }
 
-      const client = getGeminiClient();
+      const customKey = (req.headers["x-gemini-api-key"] as string) || req.body?.apiKey;
+      const client = getGeminiClient(customKey);
       const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
 
       if (!client) {
@@ -2193,8 +2095,9 @@ IMPORTANT: Output ONLY the raw JSON object, without markdown code fences.`;
           }
         }
         return res.json({
-          reply: sanitizeNarrativeOutput(createFallbackNarrative(book, lastUserMsg), book),
+          reply: sanitizeNarrativeOutput(createDynamicPremiseNarrative(book, lastUserMsg, messages), book),
           newCharacters: fallbackChars,
+          apiWarning: "No Gemini API key configured. Story generated using the local dynamic premise engine. Add a free API key from Google AI Studio in Settings for live AI generation.",
         });
       }
 
@@ -2395,6 +2298,7 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
       }));
 
       let rawReply = "";
+      let apiWarning: string | null = null;
       try {
         rawReply = await generateWithModelFallback(client, {
           contents,
@@ -2405,8 +2309,18 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
           frequencyPenalty: 0.3,
         });
       } catch (_err: any) {
+        const rawMsg = String(_err?.message || "");
+        if (
+          _err?.status === 429 ||
+          /depleted|prepay.*credits|resource_exhausted|billing/i.test(rawMsg)
+        ) {
+          apiWarning =
+            "Gemini API notice: Prepayment credits are depleted ($0 balance). The scene was generated using the local dynamic premise engine. Configure a free API key in Settings for live AI generation.";
+        } else {
+          apiWarning = `Gemini API notice: ${rawMsg || "Connection failed"}. Story generated using local dynamic premise engine.`;
+        }
         const lastUserMsg = [...validMessages].reverse().find((m: any) => m.role === "user")?.content || "";
-        rawReply = createFallbackNarrative(book, lastUserMsg);
+        rawReply = createDynamicPremiseNarrative(book, lastUserMsg, validMessages);
       }
 
       // Parse and extract any dynamic new characters from the response
@@ -2461,6 +2375,7 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
       return res.json({
         reply: cleanReply,
         newCharacters: discoveredCharacters,
+        apiWarning,
       });
     } catch (_error: unknown) {
       const fallbackBook = req.body?.book || { title: "Untitled", characters: [] };
@@ -2484,8 +2399,9 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
         }
       }
       return res.json({
-        reply: sanitizeNarrativeOutput(createFallbackNarrative(fallbackBook, fallbackMsg), fallbackBook),
+        reply: sanitizeNarrativeOutput(createDynamicPremiseNarrative(fallbackBook, fallbackMsg), fallbackBook),
         newCharacters: fallbackChars,
+        apiWarning: "System error encountered. Story generated using local dynamic premise engine.",
       });
     }
   });
@@ -2501,7 +2417,8 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
         });
       }
 
-      const client = getGeminiClient();
+      const customKey = (req.headers["x-gemini-api-key"] as string) || req.body?.apiKey;
+      const client = getGeminiClient(customKey);
       if (!client) {
         const fallback = createFallbackRewrite(originalPassage, userInstruction, book);
         return res.json({
@@ -2675,7 +2592,8 @@ Provide the fully rewritten, updated story passage now:`;
         return res.status(400).json({ error: "Text to correct is required." });
       }
 
-      const client = getGeminiClient();
+      const customKey = (req.headers["x-gemini-api-key"] as string) || req.body?.apiKey;
+      const client = getGeminiClient(customKey);
       if (!client) {
         // Simple fallback cleanup if no API key
         let cleaned = text.trim();

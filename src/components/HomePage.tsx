@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Book, Chapter } from '../types';
+import { ApiKeyModal } from './ApiKeyModal';
 import {
   BookOpen,
   Feather,
@@ -20,6 +21,7 @@ import {
   Settings,
   ArrowRight,
   BookMarked,
+  Key,
 } from 'lucide-react';
 
 interface HomePageProps {
@@ -56,6 +58,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeMenuBookId, setActiveMenuBookId] = useState<string | null>(null);
   const [showDataModal, setShowDataModal] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [importJsonText, setImportJsonText] = useState('');
   const [importStatus, setImportStatus] = useState<string | null>(null);
 
@@ -113,6 +116,17 @@ export const HomePage: React.FC<HomePageProps> = ({
 
           {/* Top Actions */}
           <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              id="library-api-key-btn"
+              type="button"
+              onClick={() => setShowApiKeyModal(true)}
+              className="p-2 sm:px-3 sm:py-1.5 text-xs text-[#6e655b] hover:text-[#24211e] hover:bg-[#eee7dc] rounded-md border border-transparent hover:border-[#dfd6c8] transition-colors flex items-center gap-1.5"
+              title="Configure Google Gemini API Key"
+            >
+              <Key className="w-3.5 h-3.5 text-[#7a282f]" />
+              <span className="hidden sm:inline">AI Key</span>
+            </button>
+
             <button
               id="library-backup-btn"
               type="button"
@@ -441,6 +455,12 @@ export const HomePage: React.FC<HomePageProps> = ({
           </div>
         </div>
       )}
+
+      {/* Gemini API Key Modal */}
+      <ApiKeyModal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+      />
     </div>
   );
 };
