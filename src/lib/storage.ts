@@ -7,17 +7,29 @@ export function getStoredBooks(): Book[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_BOOKS);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY_BOOKS, JSON.stringify(PRESET_BOOKS));
-      return PRESET_BOOKS;
+      localStorage.setItem(STORAGE_KEY_BOOKS, JSON.stringify([]));
+      return [];
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      // Auto-migrate any legacy placeholder character names
-      let libraryWasMigrated = false;
-      const cleansed = parsed.map((book: Book) => {
+    if (Array.isArray(parsed)) {
+      // Filter out any legacy preset / premade books
+      const nonPreset = parsed.filter((book: Book) => {
+        if (!book) return false;
+        if (book.isPreset) return false;
+        if (
+          book.id === 'book-midnight-archives' ||
+          book.id === 'book-perseus-veil' ||
+          book.id === 'book-belvoir-winter'
+        ) {
+          return false;
+        }
+        return true;
+      });
+
+      let libraryWasMigrated = nonPreset.length !== parsed.length;
+      const cleansed = nonPreset.map((book: Book) => {
         if (!book || !Array.isArray(book.characters)) return book;
         let modified = false;
-        const presetBook = PRESET_BOOKS.find((pb) => pb.id === book.id);
         const newChars = book.characters.map((c, i) => {
           let updatedChar = { ...c };
           if (c && /^[Tt]he\s+[Pp]rotagonist$|^[Pp]rotagonist$|^[Mm]ain\s+[Cc]haracter$|^[Tt]he\s+[Hh]ero$/i.test(c.name.trim())) {
@@ -26,8 +38,7 @@ export function getStoredBooks(): Book[] {
             updatedChar.role = c.role && !/protagonist/i.test(c.role) ? c.role : 'Lead Adventurer & Seeker';
           }
           if (!updatedChar.voiceTone) {
-            const presetChar = presetBook?.characters.find((pc) => pc.id === c.id || pc.name.toLowerCase() === c.name.toLowerCase());
-            updatedChar.voiceTone = presetChar?.voiceTone || (
+            updatedChar.voiceTone = (
               /detective|inspector|officer|soldier|commander|gritty|guard|warrior/i.test(`${c.role || ''} ${c.description || ''}`) ? 'Gritty & Blunt' :
               /poet|scholar|archivist|occult|arcane|witch|oracle/i.test(`${c.role || ''} ${c.description || ''}`) ? 'Poetic & Formal' :
               /noble|lord|lady|diplomat|queen|king|aristocrat/i.test(`${c.role || ''} ${c.description || ''}`) ? 'Formal & Aristocratic' :
@@ -39,10 +50,7 @@ export function getStoredBooks(): Book[] {
           }
           return updatedChar;
         });
-        const bookDialogueTone = book.dialogueTone || presetBook?.dialogueTone || 'Natural & Adaptive';
-        if (!book.dialogueTone && presetBook?.dialogueTone) {
-          modified = true;
-        }
+        const bookDialogueTone = book.dialogueTone || 'Natural & Adaptive';
         const greetingOnly = /^\s*(?:hi|hello|hey|hiya|good\s+(?:morning|afternoon|evening)|greetings)[\s!.,?]*$/i;
         const hasCanonLedger = Array.isArray(book.canonFacts);
         const cleanedCanonFacts = hasCanonLedger
@@ -68,10 +76,10 @@ export function getStoredBooks(): Book[] {
       }
       return cleansed;
     }
-    return PRESET_BOOKS;
+    return [];
   } catch (err) {
     console.error('Failed to load books from localStorage:', err);
-    return PRESET_BOOKS;
+    return [];
   }
 }
 

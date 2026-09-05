@@ -149,7 +149,7 @@ export default function App() {
     setView('home');
     setActiveBookId(null);
     setActiveChapterId(null);
-    showNotification('Library restored to classic preset volumes.');
+    showNotification('Library cleared.');
   };
 
   return (

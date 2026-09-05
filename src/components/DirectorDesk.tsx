@@ -49,12 +49,12 @@ interface DirectorDeskProps {
 }
 
 const DIRECTOR_SUGGESTIONS = [
-  'Set Julian to Gritty & Blunt and Silas to Sarcastic & Witty.',
-  'William and Gabrielle are best friends enrolled in the same course.',
   'Enforce strict third-person narration and ban all repetitive phrasing or words.',
   'Strip all AI clichés, formulaic sentence triads, and participial openers from the story.',
   'Guide the narrator to push past my outcomes and introduce immediate complications.',
   'Introduce a world rule: spirits can only speak when church bells ring.',
+  'Ensure each character maintains their unique voice tone and distinct vocabulary.',
+  'Anchor the prose in concrete sensory details and atmospheric tension rather than summaries.',
 ];
 
 export const DirectorDesk: React.FC<DirectorDeskProps> = ({

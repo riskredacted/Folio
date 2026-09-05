@@ -179,18 +179,25 @@ export const HomePage: React.FC<HomePageProps> = ({
 
         {/* Books Grid */}
         {filteredBooks.length === 0 ? (
-          <div className="text-center py-16 bg-[#f4eee6]/60 rounded-lg border border-dashed border-[#d8cfc4]">
-            <BookOpen className="w-10 h-10 text-[#8c8275] mx-auto mb-3 opacity-60" />
-            <p className="font-display-book text-base text-[#4a4239]">No books match your inquiry</p>
-            <p className="text-xs text-[#7e766c] font-serif-book mt-1">
-              Try searching with another phrase or bind a new volume.
+          <div className="text-center py-20 bg-[#f4eee6]/50 rounded-xl border border-dashed border-[#d8cfc4] max-w-xl mx-auto my-6 px-6">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-[#eee5d8] flex items-center justify-center text-[#7a282f] shadow-xs">
+              <BookOpen className="w-7 h-7" />
+            </div>
+            <h2 className="font-display-book text-xl text-[#2c2621]">
+              {books.length === 0 ? 'Your Library Awaits' : 'No volumes match your search'}
+            </h2>
+            <p className="text-xs sm:text-sm text-[#7e766c] font-serif-book mt-2 leading-relaxed">
+              {books.length === 0
+                ? 'Your shelves are clear and ready. Share a premise or idea to generate your first living book, characters, and opening scene.'
+                : 'Try searching with another phrase, character name, or setting.'}
             </p>
             <button
               type="button"
               onClick={onOpenNewBookModal}
-              className="mt-4 px-4 py-2 bg-[#7a282f] text-[#fbf9f5] rounded text-xs font-medium hover:bg-[#632026] transition-colors"
+              className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-[#7a282f] text-[#fbf9f5] rounded-md text-xs sm:text-sm font-medium hover:bg-[#632026] transition-colors shadow-xs"
             >
-              Bind New Book
+              <Sparkles className="w-4 h-4 text-[#e8c89b]" />
+              <span>{books.length === 0 ? 'Conceive Your First Book' : 'Conceive New Book'}</span>
             </button>
           </div>
         ) : (
