@@ -5,7 +5,7 @@
 export async function safeFetchJson<T = any>(
   input: RequestInfo | URL,
   init?: RequestInit,
-  retries = 1
+  retries = 3
 ): Promise<T> {
   let lastError: Error | null = null;
 
@@ -20,12 +20,24 @@ export async function safeFetchJson<T = any>(
         },
       });
 
+      // If server returned 502/503/504 Bad Gateway / Service Unavailable (common during Render auto-deploy or cold start)
+      if (response.status === 502 || response.status === 503 || response.status === 504) {
+        if (attempt < retries) {
+          const delay = (attempt + 1) * 1500;
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+        throw new Error(
+          `The story server is finishing a deployment or waking up (${response.status}). Please try again in 10-15 seconds.`
+        );
+      }
+
       const contentType = response.headers.get('content-type') || '';
 
       if (!contentType.includes('application/json')) {
         // If server returned HTML (e.g. during server startup or reload)
         if (attempt < retries) {
-          await new Promise((resolve) => setTimeout(resolve, 800));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
           continue;
         }
 
@@ -45,7 +57,7 @@ export async function safeFetchJson<T = any>(
         data = await response.json();
       } catch (err: any) {
         if (attempt < retries) {
-          await new Promise((resolve) => setTimeout(resolve, 600));
+          await new Promise((resolve) => setTimeout(resolve, 800));
           continue;
         }
         throw new Error(`The story engine returned an unexpected format. Please try again.`);
@@ -59,7 +71,7 @@ export async function safeFetchJson<T = any>(
     } catch (err: any) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (attempt < retries && !err?.message?.includes('Story engine error')) {
-        await new Promise((resolve) => setTimeout(resolve, 600));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         continue;
       }
       break;
