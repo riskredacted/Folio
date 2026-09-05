@@ -145,7 +145,7 @@ export const RerollModal: React.FC<RerollModalProps> = ({
               rows={4}
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
-              placeholder="e.g. 'Make Gabrielle react with suspicion instead of warmth, and reveal the torn letter in her pocket as rain hammers the glass...'"
+              placeholder="e.g. 'Make Gabrielle react with suspicion instead of warmth, and reveal the torn letter in his pocket as rain hammers the glass...'"
               className="w-full p-3 bg-[#ffffff] border border-[#d8cfc4] rounded-lg text-sm text-[#282522] focus:outline-none focus:ring-2 focus:ring-[#7a282f] font-sans-ui placeholder:text-[#9e9384] placeholder:italic shadow-sm"
               autoFocus
             />

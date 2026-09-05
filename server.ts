@@ -369,6 +369,31 @@ async function startServer() {
     return false;
   }
 
+  // Helper to determine accurate character pronouns based on canon names and character description cues
+  function getCharacterPronouns(name: string, charObj?: any): { subj: string; obj: string; poss: string; self: string } {
+    const cleanName = (name || "").toLowerCase().trim();
+    const desc = ((charObj?.description || "") + " " + (charObj?.role || "")).toLowerCase();
+
+    // Female canon names & explicit female cues:
+    const isExplicitFemale =
+      /\b(?:gabriella|kazumi|eleanor|evelyn|elena|clara|sarah|emma|olivia|sophia|ava|mia|queen|empress|lady|sister|mother|daughter|girl|woman|female)\b/i.test(cleanName) ||
+      /\b(?:she|her|hers|female|woman|girl|sister|daughter|herself)\b/i.test(desc);
+
+    // Male canon names & explicit male cues (Gabrielle in this universe is explicitly male):
+    const isExplicitMale =
+      /\b(?:william|ethan|erolson|gabrielle|gabby|sebastian|julian|arthur|silas|lucas|liam|king|emperor|lord|brother|father|son|boy|man|male)\b/i.test(cleanName) ||
+      /\b(?:he|him|his|male|man|boy|brother|son|himself)\b/i.test(desc);
+
+    if (isExplicitFemale && !isExplicitMale) {
+      return { subj: "she", obj: "her", poss: "her", self: "herself" };
+    }
+    if (isExplicitMale) {
+      return { subj: "he", obj: "him", poss: "his", self: "himself" };
+    }
+
+    return { subj: "he", obj: "him", poss: "his", self: "himself" };
+  }
+
   // Pull explicit living person names from a prose premise while strictly excluding locations and institutions
   function extractExplicitCharacterNames(idea: string): string[] {
     const nonNameOpeners = new Set([
@@ -960,34 +985,42 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
         : (charAIsTalkative ? nameA : (nameB.toLowerCase() === "gabrielle" ? nameB : nameA));
       const quietListener = talkativeSpeaker === nameB ? nameA : nameB;
 
+      const speakerChar = talkativeSpeaker === nameA ? charA : charB;
+      const listenerChar = quietListener === nameA ? charA : charB;
+      const speakerPro = getCharacterPronouns(talkativeSpeaker, speakerChar);
+      const listenerPro = getCharacterPronouns(quietListener, listenerChar);
+
       return [
         `A cool morning breeze swept across the campus walkways, carrying dry leaves across the concrete between the academic halls.`,
-        `${talkativeSpeaker} was talking with her usual lively energy, gesturing with her hands as she hopped from one topic to the next, while ${quietListener} walked beside her with his hands in his pockets, listening patiently and nodding whenever she paused for a breath.`,
+        `${talkativeSpeaker} was talking with ${speakerPro.poss} usual lively energy, gesturing with ${speakerPro.poss} hands as ${speakerPro.subj} hopped from one topic to the next, while ${quietListener} walked beside ${speakerPro.obj} with ${listenerPro.poss} hands in ${listenerPro.poss} pockets, listening patiently and nodding whenever ${speakerPro.subj} paused for a breath.`,
         `Around them, the normal rhythm of campus life moved along as usual—students carrying heavy backpacks, distant laughter near the cafeteria, and small groups sitting by the fountain who lowered their voices to whisper as the two walked past.`,
-        `"And honestly, nobody should even act surprised," ${talkativeSpeaker} remarked with a quick, amused grin, glancing sideways at him. "They pretend everything is under control, but everyone knows they're scrambling behind closed doors."`,
-        `${quietListener} gave a quiet, faint smile, his dark eyes staying calm. "You talk enough for both of us," he replied softly. "Just keep your eyes open."`,
+        `"And honestly, nobody should even act surprised," ${talkativeSpeaker} remarked with a quick, amused grin, glancing sideways at ${listenerPro.obj}. "They pretend everything is under control, but everyone knows they're scrambling behind closed doors."`,
+        `${quietListener} gave a quiet, faint smile, ${listenerPro.poss} dark eyes staying calm. "You talk enough for both of us," ${listenerPro.subj} replied softly. "Just keep your eyes open."`,
         `Before ${talkativeSpeaker} could fire back another witty comment, a sudden wave of frantic shouts broke the morning quiet.`,
         `Up ahead, the gates of ${locationName} burst open as a crowd of students came running out in pure panic.`,
         `People were stumbling over their own feet, dropping gym bags and jackets onto the grass without stopping, and shoving past one another in a desperate rush to get away from the open stadium. Several underclassmen nearly fell on the concrete, their faces pale as they yelled for everyone to run.`,
-        `${talkativeSpeaker}'s banter stopped mid-sentence. Instead of joining the stampede toward the lecture halls, she and ${quietListener} came to an immediate halt, exchanging a sharp, knowing look.`,
-        `"Well, that definitely isn't morning track practice," ${talkativeSpeaker} said, all humor vanishing from her voice as she turned toward the stadium.`,
-        `"Let's check it out," ${quietListener} answered, his easy pace turning into purposeful strides against the flow of the fleeing crowd.`,
-        `As they stepped closer to the open gates of ${locationName}, the concrete walkway beneath their shoes began to vibrate.`,
+        `${talkativeSpeaker}'s banter stopped mid-sentence. Instead of joining the stampede toward the lecture halls, ${speakerPro.subj} and ${quietListener} came to an immediate halt, exchanging a sharp, knowing look.`,
+        `"Well, that definitely isn't morning track practice," ${talkativeSpeaker} said, all humor vanishing from ${speakerPro.poss} voice as ${speakerPro.subj} turned toward the stadium.`,
+        `"Let's check it out," ${quietListener} answered, ${listenerPro.poss} easy pace turning into purposeful strides against the flow of the fleeing crowd.`,
+        `As they stepped closer to the open gates of ${locationName}, the concrete walkway under their shoes began to vibrate.`,
         `It was not a gentle shake. A deep, heavy vibration pulsed through the earth like a massive heartbeat, rattling the chain-link fences and sending ripples through water puddles along the walkway. With every step they took toward the entrance, the tremors grew stronger, vibrating right through their legs and chest.`,
         `They pushed past the last of the fleeing students and slipped through the gate into the stadium.`,
         `The metal bleachers were completely abandoned. Towels, water bottles, and spiked running shoes lay strewn across the red rubber track, left behind in the chaotic rush.`,
         `Standing directly in the center of the open field was the ${monsterName}.`,
-        `The creature was massive. Thick, cracked dark skin pulsed with a deep, unnatural hum that tore through the morning air, shaking the soil beneath its heavy clawed feet. Every breath it released sent another violent shockwave rolling through the grass, ripping deep trenches into the turf.`,
+        `The creature was massive. Thick, cracked dark skin pulsed with a deep, unnatural hum that tore through the morning air, shaking the soil under its heavy clawed feet. Every breath it released sent another violent shockwave rolling through the grass, ripping deep trenches into the turf.`,
         `Its dark, glowing eyes slowly shifted away from the empty stands, locking straight onto ${quietListener} and ${talkativeSpeaker} at the edge of the track.`,
-        `${talkativeSpeaker} stepped up right beside ${quietListener}, her hands ready as the ground shuddered violently beneath them. "Looks like we found what scared everyone off."`,
-        `${quietListener} pulled his hands out of his jacket pockets, his calm expression hardening into cold focus as his eyes locked onto the beast. "Stay ready," he said quietly. "It sees us."`
+        `${talkativeSpeaker} stepped up right beside ${quietListener}, ${speakerPro.poss} hands ready as the ground shuddered violently under them. "Looks like we found what scared everyone off."`,
+        `${quietListener} pulled ${listenerPro.poss} hands out of ${listenerPro.poss} jacket pockets, ${listenerPro.poss} calm expression hardening into cold focus as ${listenerPro.poss} eyes locked onto the beast. "Stay ready," ${listenerPro.subj} said quietly. "It sees us."`
       ].join("\n\n");
     }
 
     // 4. Walking / Campus / Transit (Simple English terms, living campus)
     if (isWalkingOrTransit) {
+      const proA = getCharacterPronouns(nameA, charA);
+      const proB = getCharacterPronouns(nameB, charB);
+
       const dialogueA = silentA
-        ? `*${nameA} walked in calm silence, hands in his pockets as he noticed the stares with a slight tilt of his head.*`
+        ? `*${nameA} walked in calm silence, hands in ${proA.poss} pockets as ${proA.subj} noticed the stares with a slight tilt of ${proA.poss} head.*`
         : getToneLine(nameA, toneA, "walk_a");
 
       const dialogueB = silentB
@@ -996,7 +1029,7 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
 
       return [
         `A cool morning breeze blew across the campus lawn, carrying dry leaves along the walkways between the classroom buildings.`,
-        `${nameA} walked with an easy, relaxed pace, hands in his pockets, while ${nameB} walked right beside him under the pale morning sky.`,
+        `${nameA} walked with an easy, relaxed pace, hands in ${proA.poss} pockets, while ${nameB} walked right beside ${proA.obj} under the pale morning sky.`,
         `Around them, normal campus life went on as usual—the sound of the clock tower ringing, doors opening down the hall, and the chatter of students on their way to class.`,
         `Still, people were clearly watching them.`,
         `A small group of students sitting near the fountain got quiet as soon as ${nameA} and ${nameB} walked past. One of them nudged his friend and pointed with his eyes, but quickly looked back down at his phone the moment ${nameA} glanced over.`,
@@ -1005,9 +1038,9 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
         dialogueB,
         `*${nameA} gave a small, calm shrug, walking ahead without caring about the whispers around them.*`,
         (toneA.includes("scholarly") || toneB.includes("scholarly"))
-          ? `"Which brings us back to the real question," ${nameA} said, keeping his voice down. "Who authorized the second key if the supervisor wasn't even here?"\n\n"Someone with full access," ${nameB} answered, eyes narrowing. "And there are only three people on this campus who can do that."`
+          ? `"Which brings us back to the real question," ${nameA} said, keeping ${proA.poss} voice down. "Who authorized the second key if the supervisor wasn't even here?"\n\n"Someone with full access," ${nameB} answered, eyes narrowing. "And there are only three people on this campus who can do that."`
           : (toneA.includes("gritty") || toneB.includes("gritty"))
-            ? `"You have the drive safe?" ${nameA} asked quietly, not turning his head.\n\n"Tucked away where nobody finds it," ${nameB} replied under his breath. "Just watch the door."`
+            ? `"You have the drive safe?" ${nameA} asked quietly, not turning ${proA.poss} head.\n\n"Tucked away where nobody finds it," ${nameB} replied under ${proB.poss} breath. "Just watch the door."`
             : `"Fair point," ${nameA} added with an amused smile. "Though if the dean asks us what happened, your 'let them stare' plan might not work."\n\n"It will work fine," ${nameB} shot back with a quick grin. "I'll just show them the exact files they thought they deleted. That always shuts people up fast."`,
         `Up ahead, near the main hall entrance, an announcement chime rang out, flashing a notice on the screens as someone near the doorway watched them closely before turning down the hall.`
       ].join("\n\n");
@@ -2183,8 +2216,10 @@ IMPORTANT: Output ONLY the raw JSON object, without markdown code fences.`;
         knownChars.length > 0
           ? knownChars
               .map(
-                (c: { name: string; role: string; description: string; voiceTone?: string }) =>
-                  `• ${c.name} (${c.role || "Character"}) [Voice Tone: ${c.voiceTone || defaultBookTone}]: ${c.description || "Active in the story."}`
+                (c: { name: string; role: string; description: string; voiceTone?: string }) => {
+                  const pro = getCharacterPronouns(c.name, c);
+                  return `• ${c.name} (${c.role || "Character"}) [Pronouns: ${pro.subj}/${pro.obj}/${pro.poss}] [Voice Tone: ${c.voiceTone || defaultBookTone}]: ${c.description || "Active in the story."}`;
+                }
               )
               .join("\n")
           : "None currently registered. Characters emerge dynamically as the user or narrator mentions them.";
@@ -2321,7 +2356,12 @@ THE NARRATOR'S CREED & PRIME DIRECTIVE:
    - NO DIALOGUE OR THOUGHT REPETITION: Characters must never voice repetitive sentiments, warnings, or questions they have already uttered in previous turns (e.g. repeating "we don't have much time" or "who did this?"). Every utterance must contribute NEW information, an escalation, a shift in stakes, or a decisive reaction.
    - NO ACTION REPLAY: Never re-describe physical actions that were already performed in prior turns (e.g., drawing a weapon that was already drawn, stepping through a doorway already crossed, eyeing an exit already noted). Treat past actions as permanently resolved and progress forward.
    - PREVENT SCENE STAGNATION: If a scene has established atmosphere, do not re-describe the same fog, rain, room lighting, or silence. Advance the physical events and character dynamics.
- 15. ABSOLUTE THREAT & ENTITY SEPARATION (NEVER MAKE MONSTERS INTO STUDENTS OR COMPANIONS):
+ 15. ABSOLUTE THREAT SEPARATION & STRICT CANON PRONOUN FIDELITY:
+    - GENDER & PRONOUN FIDELITY (MANDATORY): Always use the canonical pronouns for every character.
+      • Gabrielle (Gabrielle Sebastian de Vara) is MALE and MUST strictly be referred to using masculine pronouns ("he", "him", "his", "himself"). NEVER refer to Gabrielle as "she", "her", or "herself".
+      • William (Ethan William Erolson) is MALE ("he", "him", "his", "himself").
+      • Kazumi / Gabriella Kazumi de Vara is FEMALE ("she", "her", "hers", "herself").
+      • Eleanor is FEMALE ("she", "her", "hers", "herself").
     - When the author's premise introduces a monster, demon, creature, beast, titan, fiend, or enemy anomaly (such as "a Tyran Resonant demon", "a shadow beast", "a blood fiend"):
       • NEVER treat the creature as a student, companion, or speaking friend walking casually with the leads.
       • NEVER replace or erase named companions (like Gabrielle or William) with the monster's name.
@@ -2543,7 +2583,8 @@ THE NARRATOR'S REWRITE DIRECTIVE:
    - Eliminate echo words and repeated sentence structures. If a word, descriptor, or metaphor was used in the previous sentence or the original passage, do not repeat it.
    - Ban narrative looping: do not rehash known facts, repeated doubts, or identical warnings. Push the rewrite into fresh sensory territory and direct escalation.
    - Varied syntax: ensure every sentence begins with a different grammatical structure and varies in length.
-11. ABSOLUTE THREAT & ENTITY SEPARATION:
+11. ABSOLUTE THREAT & ENTITY SEPARATION & PRONOUN FIDELITY:
+   - Always use canonical pronouns for every character. Gabrielle (Gabrielle Sebastian de Vara) is MALE ("he", "him", "his", "himself"). NEVER call Gabrielle "she" or "her". William (Ethan William Erolson) is MALE ("he", "him", "his"). Kazumi / Gabriella Kazumi de Vara is FEMALE ("she", "her", "hers"). Eleanor is FEMALE ("she", "her", "hers").
    - When the rewrite instruction introduces a monster, demon, creature, beast, titan, or hostile anomaly (such as "a Tyran Resonant demon"), NEVER treat that creature as a human student, companion, or speaking friend walking casually with the characters. It is an antagonistic threat or environmental emergency.
    - Always preserve the preferred short names the author uses (e.g. "William", "Gabrielle").
 12. If this rewrite introduces NEW named characters not in the dramatis personae, append \`\`\`character-manifest at the end with JSON array.`;
