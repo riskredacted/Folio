@@ -548,10 +548,11 @@ async function startServer() {
     }
 
     // Genre & Environmental cues (derived from themes, not dumped verbatim)
-    const genreStr = `${book?.genre || ""} ${book?.setting || ""} ${book?.title || ""}`.toLowerCase();
-    const isSciFi = /sci-fi|space|cyber|futur|station|star|orbit|ship|hull|trans-orbit|cyberpunk/i.test(genreStr);
-    const isGothic = /gothic|victorian|mystery|detective|investigation|occult|archives|manor|estate|highgate|belvoir/i.test(genreStr);
-    const isFantasy = /fantasy|magic|wizard|sorcer|sword|castle|dragon|alchem|realm|kingdom/i.test(genreStr);
+    const combinedWorld = `${book?.genre || ""} ${book?.setting || ""} ${book?.title || ""} ${cleanPrompt}`.toLowerCase();
+    const isCampus = /\b(?:campus|college|university|academy|school|faculty|quad|dorm|lecture|student|students)\b/i.test(combinedWorld);
+    const isSciFi = !isCampus && /sci-fi|space|cyber|futur|station|star|orbit|ship|hull|trans-orbit|cyberpunk/i.test(combinedWorld);
+    const isGothic = !isCampus && /gothic|victorian|occult|manor|estate|highgate|belvoir/i.test(combinedWorld);
+    const isFantasy = !isCampus && /fantasy|magic|wizard|sorcer|sword|castle|dragon|alchem|realm|kingdom/i.test(combinedWorld);
 
     // Intent detection
     const isWalkingOrTransit = /\b(?:walk|walking|walked|stroll|strolling|strolled|wander|wandering|pace|pacing|footsteps|stride|campus|grounds?|courtyard|corridor|hallway|path|avenue|street|sidewalk|quad|casual|casually|talking|moving)\b/i.test(cleanPrompt);
@@ -641,112 +642,155 @@ async function startServer() {
       }
     };
 
+    const isCampusOrModern = !isSciFi && !isGothic && !isFantasy;
+
     // 1. Direct Spoken Dialogue
     if (spokenText) {
       const activeRespondent = silentB ? (silentA ? null : nameA) : nameB;
       const respondentTone = activeRespondent === nameA ? toneA : toneB;
       const otherPerson = activeRespondent === nameA ? nameB : nameA;
 
-      const para1 = `*The words hang between them in the charged air, demanding an immediate answer.*`;
-      const para2 = activeRespondent
+      const para1 = `*The words hang between them in the charged air, demanding an immediate answer as their footsteps maintain an unhurried, deliberate cadence.*`;
+
+      const para2 = isCampusOrModern
+        ? `*Across the walkway, several passing students cast lingering, curious glances in their direction, picking up on the sudden gravity in their posture. A couple of underclassmen seated near the courtyard steps subtly leaned closer, straining to catch the thread of their conversation before ${nameA}'s sharp, warning glance sent them quickly looking down into their binders.*`
+        : isSciFi
+          ? `*Along the transit concourse, passing commuters and station technicians cast guarded eyes toward the pair, sensing the abrupt shift in tension. Both of them instinctively dropped their volume, allowing the low, mechanical thrum of the deck recyclers to swallow the sound.*`
+          : isGothic
+            ? `*In the vaulted quiet of the cloister, the question seemed to carry with unnerving clarity against the damp flagstones. An archival clerk carrying an armful of ledgers paused near the pillar, eyes lingering over spectacles before ${nameA} cleared his throat to signal that the space was not public.*`
+            : `*Surrounding onlookers in the immediate perimeter took subtle note of the pause, reading the sudden tension between the two and giving them a wider berth as they spoke.*`;
+
+      const para3 = activeRespondent
         ? getToneLine(activeRespondent, respondentTone, "dialogue_reply")
         : `*${nameB} remains completely silent, their expression unyielding and guarded. A sharp, intentional gesture toward the corridor conveys all the urgency that spoken words never could.*`;
-      const para3 = otherPerson && !silentA && activeRespondent !== nameA
-        ? `*${nameA} catches the subtle shift in tempo, matching stride and keeping eyes fixed on the surrounding space as the conversation deepens.*`
-        : `*The silence settles with palpable weight, shifting the momentum into the next decision.*`;
-      const para4 = isSciFi
-        ? `*Down the concourse, an auxiliary monitor flashes an amber priority alert, its low audio chime cutting through the hum of the deck.*`
+
+      const para4 = (silentA || activeRespondent === nameA)
+        ? `*${otherPerson} held the line with quiet intensity, eyes scanning the perimeter to make certain no one had drawn close enough to decipher the subtext.*`
+        : (toneA.includes("sarcastic") || toneB.includes("sarcastic"))
+          ? `"You're unusually focused today," ${otherPerson} remarked with a quick, measuring smirk. "Usually you pretend not to care until the alarms are actually ringing."\n\n"I care about not being interrogated in a windowless room," ${activeRespondent} retorted with a dry smile. "There's a subtle distinction."`
+          : `"We both knew this was coming," ${otherPerson} replied quietly, stepping in closer. "The only real question is whether we move first or wait for them to make their play."\n\n"We never wait," ${activeRespondent} answered firmly. "Waiting is how you end up reacting to someone else's agenda."`;
+
+      const para5 = `*The silence that follows settles with unmistakable weight, sealing the consensus between them as they close the gap between planning and execution.*`;
+
+      const para6 = isSciFi
+        ? `*Down the concourse, an auxiliary monitor flashes an amber priority alert, its low audio chime cutting through the hum of the deck as a new security notice is posted.*`
         : isGothic
-          ? `*From somewhere deep in the old masonry, the heavy clang of a closing iron gate echoes, signaling that the window for hesitation has passed.*`
+          ? `*From somewhere deep in the old masonry, the heavy clang of a closing iron gate echoes, signaling that the window for hesitation has permanently passed.*`
           : isFantasy
             ? `*A sudden chill stirs the torchlight along the arches, carrying the faint, unmistakable scrape of steel being drawn from a scabbard.*`
-            : `*Ahead, near the department entrance, a figure in a dark jacket pauses by the notice boards, glancing back in their direction before quickening their pace.*`;
+            : `*Ahead, near the department entrance, a digital display blinks to life with a priority notification, drawing the gaze of dozens of gathering students while a lone observer watches ${nameA} and ${nameB} from the top step.*`;
 
-      return [para1, para2, para3, para4].join("\n\n");
+      return [para1, para2, para3, para4, para5, para6].join("\n\n");
     }
 
     // 2. Walking / Campus / Strolling / Transit
     if (isWalkingOrTransit) {
       const para1 = isSciFi
-        ? `*Overhead light strips bathed the transit concourse in cool luminescence as automated air scrubbers hummed within the bulkheads. ${nameA} and ${nameB} walked in steady synchronization across the reinforced polymer decking, their footfalls rhythmically echoing.*`
+        ? `*Overhead light strips bathed the multi-level transit concourse in a cool, steady luminescence as automated atmospheric scrubbers hummed softly within the bulkheads. ${nameA} and ${nameB} walked in synchronized stride across the reinforced polymer deck, the sharp click of their boots cutting through the ambient drone of commuter trams gliding along the magnetic rails overhead.*`
         : isGothic
-          ? `*An autumn mist clung to the weathered stone arches along the quadrangle, dampening the scrape of boot heels against the flagstones. ${nameA} and ${nameB} walked shoulder-to-shoulder beneath the shadow of tall leaded windows, breath misting lightly in the cold air.*`
+          ? `*A damp afternoon mist curled through the heavy stone arches of the quadrangle, settling over the flagstones and clinging to the weathered ivy along the hall facades. ${nameA} walked shoulder-to-shoulder with ${nameB} beneath the shadows of tall leaded windows, collars turned high against the autumn chill as their measured footfalls echoed against ancient masonry.*`
           : isFantasy
-            ? `*Sunlight broke across the high battlements, casting long shadows over the cobblestones as merchants and messengers hurried past. ${nameA} and ${nameB} wove through the outer courtyard with steady, measured strides.*`
-            : `*A brisk breeze rustled through the trees lining the central courtyard, scattering pale leaves across the paved walkways as clusters of students drifted between lecture halls. ${nameA} walked with an easy, unhurried stride, hands loosely in his pockets, while ${nameB} kept pace alongside him under the cool autumn sky.*`;
+            ? `*Sunlight spilled across the high stone battlements and down into the bustling outer thoroughfare, catching the flutter of colorful guild banners overhead. ${nameA} and ${nameB} navigated the stone promenade with practiced, steady strides, weaving past merchants, apprentices, and couriers beneath the open sky.*`
+            : `*A crisp autumn breeze swept across the wide campus quadrangle, sending amber leaves skimming along the polished concrete walkways that linked the glass-paneled science complex to the older collegiate brick halls. ${nameA} walked with an easy, unhurried stride, his hands loosely buried in his jacket pockets, while ${nameB} kept pace alongside him under the pale, late-morning sky. In the background, the campus grounds hummed with ordinary activity—the distant chime of the library clock tower, the low whine of an electric maintenance cart, and the murmur of students drifting between seminars.*`;
 
-      const para2 = silentA
-        ? `*${nameA} walked in deliberate silence, his expression calm and observant, conveying his thoughts with a subtle tilt of his head toward the central hall.*`
+      const para2 = isSciFi
+        ? `*Despite the heavy commuter traffic, an observant ripple followed their clearance beacons. A pair of off-duty technicians standing by the transit terminal lowered their voices as the two approached, nudging one another while their eyes tracked the distinct security emblems pinned to ${nameA} and ${nameB}'s collars. No one stepped forward to challenge them directly, but the cautious hush and lingering sideways stares confirmed their reputations had already preceded them onto this deck.*`
+        : isGothic
+          ? `*The ambient whispers of the cloister grew quiet as they passed. Several archival clerks and junior scholars huddled near the library pillars paused in their reading, exchanging pointed glances over the rims of their spectacles. Fingers gestured subtly beneath heavy wool cloaks, recognizing the pair whose names had been tied to yesterday's quiet scandal.*`
+          : isFantasy
+            ? `*A noticeable hush spread through the immediate stalls as the two drew level with the artisan quarter. A group of seasoned guardsmen resting outside the watchpost straightened slightly, their murmurs dropping into watchful silence as their eyes lingered on ${nameA} and ${nameB}'s weapons and heraldry.*`
+            : `*Yet beneath the ordinary routine of the grounds, an unmistakable ripple of recognition tracked their every step. A small group of students leaning against the low stone balustrade near the courtyard fountain abruptly lowered their voices as the pair drew near, with an underclassman in a green windbreaker nudging his companion and casting a sharp, lingering look in their direction. Across the plaza steps, two others carrying heavy binders turned their heads just enough to track ${nameA} and ${nameB} as they passed, whispering hurried speculation behind raised hands before hastily pretending to study their course notes the moment ${nameA}'s gaze drifted toward them.*`;
+
+      const para3 = silentA
+        ? `*${nameA} walked in deliberate silence, his posture relaxed and watchful. With a subtle flick of his eyes toward the whispering onlookers and an intentional tilt of his chin, he acknowledged the scrutiny without uttering a single word.*`
         : getToneLine(nameA, toneA, "walk_a");
 
-      const para3 = silentB
-        ? `*${nameB} offered no spoken reply, keeping a watchful eye on the perimeter while matching his stride without a moment's hesitation.*`
+      const para4 = silentB
+        ? `*${nameB} offered no spoken rejoinder—silence remained their constant shield. Yet the subtle adjustment of their bag and the sharp, dismissive glance cast toward the onlookers spoke volumes.*`
         : getToneLine(nameB, toneB, "walk_b");
 
-      const para4 = isSciFi
-        ? `*A sharp audio alert chimed from ${nameB}'s terminal link, flashing an amber priority glyph. Down the concourse, the automated security checkpoint shifted into active scan mode, sweeping twin sensor bars across the oncoming crowd.*`
-        : isGothic
-          ? `*The tolling of the distant chapel bell signaled the quarter hour, its iron tone vibrating through the stone. From the darkened doorway of the old archive hall, the rustle of turning parchment abruptly stopped as their footsteps drew near.*`
-          : isFantasy
-            ? `*A sudden hush fell over the nearby stalls as an armored courier wheeled past, clutching a scroll bearing the silver seal of the magistrate. Two observers detached themselves from the wall, falling into step thirty paces behind.*`
-            : `*Ahead of them, near the steps leading to the main hall, a sudden chime from the digital bulletin board cut through the chatter as a fresh announcement flashed across the screen. At the same moment, a familiar student in a heavy dark jacket stepped away from the pillars, making brief, pointed eye contact before ducking into the east concourse.*`;
+      const para5 = (silentA || silentB)
+        ? `*The two of them pressed forward without breaking stride, the mutual understanding between them tighter than any spoken agreement as they navigated the observant crowd.*`
+        : (toneA.includes("scholarly") || toneB.includes("scholarly"))
+          ? `"Which brings us back to the primary contradiction," ${nameA} noted, his voice dropping another register. "Who authorized the second decryption key if the supervisor was off-site?"\n\n"Someone with root privileges," ${nameB} replied, eyes narrowing in thought. "And there are only three people on this campus who fit that description."`
+          : (toneA.includes("gritty") || toneB.includes("gritty"))
+            ? `"You got the drive secured?" ${nameA} asked, not turning his head.\n\n"Tucked where nobody finds it without a full search," ${nameB} replied under their breath. "Just watch the west exit."`
+            : (toneA.includes("formal") || toneB.includes("formal"))
+              ? `"We must ensure our documentation remains beyond reproach," ${nameA} remarked quietly.\n\n"Rest assured, every entry has been independently verified," ${nameB} replied with steady confidence.`
+              : `"Fair point," ${nameA} added with an amused shake of the head, "though if the dean asks for a formal explanation during afternoon review, your 'let them stare' defense might need some legal polish."\n\n"I have plenty of polish," ${nameB} shot back with a razor-sharp grin. "It's called showing them the exact timestamps they thought they deleted. That usually shuts people up rather quickly."`;
 
-      return [para1, para2, para3, para4].join("\n\n");
+      const para6 = isSciFi
+        ? `*A sudden priority alert pulsed through ${nameB}'s wrist terminal, its amber ring flashing twice before resolving into an encrypted waypoint. Across the concourse, the automated perimeter barriers shifted into secondary scan mode, signaling that routine transit was about to be restricted.*`
+        : isGothic
+          ? `*The iron toll of the clock tower struck the third quarter, vibrating deep through the damp masonry. From around the corner of the cloister, the sudden hurried slap of leather soles against wet stone announced someone approaching at a dead run, clutching a bundle of papers to their chest.*`
+          : isFantasy
+            ? `*A sharp horn call echoed from the outer gatehouse, cutting through the market clamor. As the crowd parted, an armored courier mounted on a sweat-lathered steed galloped past, bearing the red-waxed seal of the high council directly toward the keep.*`
+            : `*Up ahead, the electronic chime of the campus communications array cut through the air, flashing a scheduled advisory across the overhead displays flanking the rotunda entrance. As the crowd of students surged toward the double glass doors, a lone figure in a dark jacket detached from the shadowed arcade, pausing by the bulletin pillar to cast a deliberate, unblinking look directly toward the two of them before slipping into the east service corridor.*`;
+
+      return [para1, para2, para3, para4, para5, para6].join("\n\n");
     }
 
     // 3. Investigation / Searching / Examination
     if (isInvestigation) {
-      const para1 = `*The mechanism yields with a muted metallic click, revealing a recessed compartment packed with sealed documents and an unflagged digital drive.*`;
-      const para2 = silentA
+      const para1 = `*The mechanism yields with a muted metallic click, the seam separating smoothly beneath careful pressure to reveal a recessed compartment built flush into the structure.*`;
+      const para2 = `*Inside, neatly tucked away from casual inspection, rests a heavy dossier bound with faded crimson tape, accompanied by an encrypted storage drive bearing a Department oversight watermark. Outside in the hallway, the distant sound of student foot traffic and locker latches continues unabated, completely oblivious to what has just been brought to light.*`;
+      const para3 = silentA
         ? `*${nameA} points directly to the timestamp on the upper casing, eyebrows raised in silent warning.*`
         : getToneLine(nameA, toneA, "search_a");
-      const para3 = silentB
+      const para4 = silentB
         ? `*${nameB} nods once, already watching the doorway and signaling urgency with a sharp gesture.*`
         : getToneLine(nameB, toneB, "search_b");
-      const para4 = `*In the corridor outside, the sudden sound of heavy boots striking the floorboards announces an approaching patrol, cutting short any further inspection.*`;
+      const para5 = `"Look at the signature," ${nameA} whispered, carefully turning the corner of the topmost sheet. "This wasn't authorized by the registrar. It came straight from the provost's private terminal."\n\n"Which means we have about two minutes before the automated audit flags the access," ${nameB} answered, pocketing the drive with practiced speed.*`;
+      const para6 = `*In the corridor outside, the sudden squeak of rubber soles against polished tile announces an approaching security patrol, cutting short any further debate and forcing an immediate retreat.*`;
 
-      return [para1, para2, para3, para4].join("\n\n");
+      return [para1, para2, para3, para4, para5, para6].join("\n\n");
     }
 
     // 4. Combat / Action / Pursuit
     if (isCombatOrAction) {
-      const para1 = `*The sudden impact shatters the tense stillness, sending a shockwave of motion across the room as boots skid against the floor to secure immediate positioning.*`;
-      const para2 = silentA
+      const para1 = `*The sudden impact shatters the tense stillness, sending a violent shudder through the immediate room as wood splinters and the physical line of engagement erupts into raw, kinetic motion.*`;
+      const para2 = `*Bystanders and onlookers instantly scatter in pandemonium—chairs scrape wildly against the floor, books and trays tumble to the tile, and frantic shouts echo down the hallway as a crowd scrambles for the exit doors, clearing a wide, chaotic perimeter.*`;
+      const para3 = silentA
         ? `*${nameA} launches forward without a sound, intercepting the line of sight and locking down the forward approach.*`
         : getToneLine(nameA, toneA, "combat_a");
-      const para3 = silentB
+      const para4 = silentB
         ? `*${nameB} secures the flank in rigid silence, weapon readied and eyes tracking every micro-movement.*`
         : getToneLine(nameB, toneB, "combat_b");
-      const para4 = `*From the shadows beyond the threshold, reinforcements begin to converge, their silhouettes cutting through the flickering light.*`;
+      const para5 = `*Boots skid hard across the slick floor as the counter-strike connects, forcing the opposing threat backward into the corridor and opening a narrow window of escape.*`;
+      const para6 = `*From the shadows beyond the threshold, reinforcements begin to converge, their silhouettes cutting through the flickering lights as emergency alarms begin their piercing wail.*`;
 
-      return [para1, para2, para3, para4].join("\n\n");
+      return [para1, para2, para3, para4, para5, para6].join("\n\n");
     }
 
     // 5. Downtime / Rest / Cafeteria
     if (isDowntimeOrRest) {
-      const para1 = `*The ambient murmur of conversation filters through the seating area as steam rises from hot mugs onto the polished tabletop.*`;
-      const para2 = silentA
+      const para1 = `*The ambient murmur of lunchtime chatter filters through the commons as steam curls lazily from ceramic mugs onto the polished oak table.*`;
+      const para2 = `*Across the room, the atmosphere is quietly observant. At a booth two rows back, a group of three upperclassmen lean in together over half-finished trays, their eyes darting periodically toward ${nameA} and ${nameB}. Every few seconds, a whispered remark is passed, followed by a covert glance to see if either of them has noticed the attention.*`;
+      const para3 = silentA
         ? `*${nameA} sets down his cup in measured silence, observing the room with steady vigilance.*`
         : getToneLine(nameA, toneA, "rest_a");
-      const para3 = silentB
+      const para4 = silentB
         ? `*${nameB} takes a seat across from him, leaning in to review the situation.*`
         : getToneLine(nameB, toneB, "rest_b");
-      const para4 = `*A sudden ping from the table terminal disrupts the lull, displaying an unread transmission addressed specifically to the two of them.*`;
+      const para5 = `"They're not even trying to hide it," ${nameA} noted softly, tracing a fingertip along the warm ceramic edge. "At this rate, the entire campus will have our names on a bulletin by sunset."\n\n"Good," ${nameB} murmured back with an easy sip. "When everyone is looking at the front door, nobody watches what's slipping through the back."`;
+      const para6 = `*A sudden chime from the tabletop terminal disrupts the lull, displaying an unread transmission flagged with the personal crest of the academy director.*`;
 
-      return [para1, para2, para3, para4].join("\n\n");
+      return [para1, para2, para3, para4, para5, para6].join("\n\n");
     }
 
     // 6. General / Story Advancement
-    const para1 = `*The momentum shifts forward as ${nameA} and ${nameB} navigate the unfolding scene, every movement deliberate under the watchful eyes of their surroundings.*`;
-    const para2 = silentA
+    const para1 = `*The momentum shifts forward as ${nameA} and ${nameB} navigate the unfolding scene, their footsteps falling into an instinctive, shared cadence.*`;
+    const para2 = `*Around them, the living environment reacts to their passage—bystanders taking subtle note of their presence, hushed murmurs passing between onlookers, and the tension of an unwritten conflict hovering just below the surface.*`;
+    const para3 = silentA
       ? `*${nameA} takes the lead in silence, his posture resolute and focused on the objective ahead.*`
       : getToneLine(nameA, toneA, "walk_a");
-    const para3 = silentB
+    const para4 = silentB
       ? `*${nameB} keeps stride beside him, readiness evident in every step.*`
       : getToneLine(nameB, toneB, "walk_b");
-    const para4 = `*An unexpected development unfolds before them, opening a new path while closing the door on retreat.*`;
+    const para5 = `"Whatever comes next, we stay on the same page," ${nameA} said quietly, eyes scanning the path ahead.\n\n"Always," ${nameB} replied without hesitation.*`;
+    const para6 = `*An unexpected development unfolds before them, opening a new path while closing the door on retreat.*`;
 
-    return [para1, para2, para3, para4].join("\n\n");
+    return [para1, para2, para3, para4, para5, para6].join("\n\n");
   }
 
   // Graceful storytelling passage rewrite generator with deep instruction understanding
@@ -1907,12 +1951,17 @@ THE NARRATOR'S CREED & PRIME DIRECTIVE:
 9. ACTION & COMBAT (STRICT "SHOW, DON'T TELL"):
    - Absolutely NEVER use gaming terminology (strictly forbidden: "HP", "stats", "aggro", "hitbox", "mana bar", "level up", "debuff", "buff", "DPS", "cooldown", "spawn", "XP", "aurafarm").
    - Instead, describe the physical momentum, kinetic force, strain in muscles, the friction of magic, and the destruction of the surrounding environment.
-10. DYNAMIC NPC BEHAVIOR:
-   - Bystanders and background NPCs must NEVER stand frozen like statues. Show them reacting with panic, whispers, hasty glances, scrambling for cover, or continuing their shady business while the main scene unfolds.
-11. FORMATTING & DIALOGUE:
-   - Spoken dialogue in quotation marks ("..."), always on its own separate paragraph.
-   - Physical actions, gestures, and atmospheric pauses wrapped in asterisks (*like this*).
-   - Write 2 to 4 evocative, well-paced paragraphs separated by blank lines that directly drive the scene forward.
+10. DYNAMIC NPC BEHAVIOR & LIVING WORLD ECOLOGY (MAKE THE WORLD FEEL ALIVE):
+   - The world around the characters MUST feel vibrant, populated, and observant: on a campus, students are walking between halls, sitting on benches, leaning on railings; in a station or city street, crowds and bystanders go about their daily routines.
+   - DO NOT have random strangers casually walk up and start talking to the leads out of nowhere unless the scene explicitly warrants it.
+   - INSTEAD, SHOW REALISTIC SOCIAL OBSERVATION & RECOGNITION:
+     • Surrounding bystanders recognize and observe the characters: show nearby students or bystanders lowering their voices, whispering in small huddles by lockers or courtyard steps, nudging a friend, casting lingering sideways glances, or looking at them because of recent events, reputation, or rumors.
+     • Capture ambient background life continuing naturally: the clatter of binders, distant laughter, cafeteria noise, transit hums.
+     • Show how the leads navigate that attention: low-toned dialogue, subtle shared looks, maintaining their pace, or deliberately ignoring the scrutiny.
+11. EXPANSIVE, RICH NARRATIVE LENGTH & PACING (NO RUSHED OR SHORT SCENES):
+   - Avoid curt, rushed, or truncated turns. Do not compress scenes into short summaries.
+   - Write 4 to 6 substantial, richly detailed literary paragraphs separated by blank lines that thoroughly flesh out the atmosphere, the living bystander reactions, multi-turn character dialogue with natural pauses, and immediate forward progression.
+   - Every turn must read like a polished, vivid chapter segment from a published novel.
 12. ABSOLUTE BAN ON AI WRITING CLICHÉS & TIRED TROPES:
    - You are STRICTLY FORBIDDEN from using exhausted AI idioms, purple tropes, and robotic melodrama:
      • NEVER write "let out a breath they didn't know they were holding" or "released a breath".
