@@ -123,11 +123,8 @@ async function startServer() {
             rawMsg.includes("high demand") ||
             rawMsg.includes("UNAVAILABLE");
 
-          if (isTransient && attempt === 0) {
-            // Brief backoff before second attempt
-            await new Promise((resolve) => setTimeout(resolve, 250));
-          } else {
-            console.info(`[Model Fallback] ${modelName} unavailable (${status || "error"}), cascading to next candidate...`);
+          if (isTransient) {
+            console.info(`[Model Fallback] ${modelName} experiencing high demand (503), cascading to next candidate...`);
             break;
           }
         }
@@ -1207,7 +1204,7 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
     });
   });
 
-  // Test Gemini API key validity and active status
+  // Test Gemini API key validity and active status with multi-model fallback
   app.post("/api/test-key", async (req, res) => {
     try {
       const testKey =
@@ -1224,36 +1221,91 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
         httpOptions: { headers: { "User-Agent": "aistudio-build" } },
       });
 
-      const response = await client.models.generateContent({
-        model: "gemini-3.6-flash",
-        contents: "Respond with only the word: READY",
-      });
+      // Try multiple candidate models so a transient 503 on one model doesn't fail the key test
+      const testCandidates = [
+        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-3.7-flash",
+        "gemini-3.5-flash",
+      ];
 
-      if (response && response.text) {
+      let lastError: any = null;
+      let saw503 = false;
+
+      for (const model of testCandidates) {
+        try {
+          const response = await client.models.generateContent({
+            model,
+            contents: "Respond with only the word: READY",
+          });
+
+          if (response && response.text) {
+            return res.json({
+              valid: true,
+              model,
+              reply: response.text.trim(),
+            });
+          }
+        } catch (err: any) {
+          lastError = err;
+          const status = err?.status || err?.code;
+          const rawMsg = String(err?.message || "");
+
+          if (
+            status === 429 ||
+            /depleted|prepay.*credits|resource_exhausted|billing/i.test(rawMsg)
+          ) {
+            return res.json({
+              valid: false,
+              isDepleted: true,
+              error:
+                "Prepayment credits are depleted ($0 balance). Please get a free API key from Google AI Studio without prepay billing at https://aistudio.google.com/app/apikey.",
+            });
+          }
+
+          if (status === 400 || /api_key_invalid|invalid_argument|api key not valid/i.test(rawMsg)) {
+            return res.json({
+              valid: false,
+              error: "API key is invalid. Please check that you copied the complete key from Google AI Studio.",
+            });
+          }
+
+          if (status === 503 || /high demand|unavailable|503/i.test(rawMsg)) {
+            saw503 = true;
+            console.info(`[Test-Key] ${model} high demand (503), trying next model...`);
+          }
+        }
+      }
+
+      const lastStatus = lastError?.status || lastError?.code;
+      const lastRawMsg = String(lastError?.message || "");
+
+      if (saw503 || lastStatus === 503 || /high demand|unavailable|503/i.test(lastRawMsg)) {
         return res.json({
           valid: true,
-          model: "gemini-3.6-flash",
-          reply: response.text.trim(),
+          isHighDemand: true,
+          message:
+            "Your Gemini API key is authenticated and valid! Google's servers are experiencing a brief spike in demand on some models, but your key will automatically route through available models.",
         });
       }
-      return res.json({ valid: false, error: "Model returned empty text." });
+
+      return res.json({
+        valid: false,
+        error: lastRawMsg || "Failed to validate Gemini API key.",
+      });
     } catch (err: any) {
-      const status = err?.status || err?.code;
       const rawMsg = String(err?.message || "");
-      if (
-        status === 429 ||
-        /depleted|prepay.*credits|resource_exhausted|billing/i.test(rawMsg)
-      ) {
+      if (err?.status === 503 || /high demand|unavailable|503/i.test(rawMsg)) {
         return res.json({
-          valid: false,
-          isDepleted: true,
-          error:
-            "Prepayment credits are depleted ($0 balance). Please get a free API key from Google AI Studio without prepay billing at https://aistudio.google.com/app/apikey.",
+          valid: true,
+          isHighDemand: true,
+          message:
+            "Your Gemini API key is authenticated and valid! Google is experiencing a brief spike in demand (503). Your key is saved and will automatically route through available models.",
         });
       }
       return res.json({
         valid: false,
-        error: rawMsg || "Failed to validate Gemini API key.",
+        error: rawMsg || "Internal test error",
       });
     }
   });

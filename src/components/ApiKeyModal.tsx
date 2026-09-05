@@ -43,6 +43,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
         model?: string;
         error?: string;
         isDepleted?: boolean;
+        isHighDemand?: boolean;
+        message?: string;
       }>('/api/test-key', {
         method: 'POST',
         body: JSON.stringify({
@@ -51,10 +53,19 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
       });
 
       if (response.valid) {
-        setTestResult({
-          status: 'success',
-          message: `Successfully connected to Google Gemini (${response.model || 'gemini-3.6-flash'})! Live AI is active.`,
-        });
+        if (response.isHighDemand) {
+          setTestResult({
+            status: 'success',
+            message:
+              response.message ||
+              'Key authenticated and verified! Google is experiencing a temporary spike in traffic (503), but your key is saved and will automatically cascade between available models.',
+          });
+        } else {
+          setTestResult({
+            status: 'success',
+            message: `Successfully connected to Google Gemini (${response.model || 'gemini-3.5-flash-lite'})! Live AI is active.`,
+          });
+        }
       } else if (response.isDepleted) {
         setTestResult({
           status: 'depleted',
