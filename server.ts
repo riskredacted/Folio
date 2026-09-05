@@ -51,6 +51,9 @@ async function startServer() {
       "gemini-3.7-flash",
       "gemini-3.6-flash",
       "gemini-3.5-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3-flash-preview",
+      "gemini-flash-latest",
     ];
 
     let lastError: unknown = null;
@@ -91,27 +94,28 @@ async function startServer() {
         } catch (err: any) {
           lastError = err;
           const status = err?.status || err?.code;
-          const isQuotaDepleted =
-            err?.message?.includes("depleted") ||
-            err?.message?.includes("RESOURCE_EXHAUSTED") ||
-            err?.message?.includes("billing");
+          const rawMsg = String(err?.message || "");
 
-          if (isQuotaDepleted) {
+          // If prepayment credits are explicitly depleted across the billing project, stop early
+          const isPrepayDepleted = /prepayment.*depleted|prepay.*credits/i.test(rawMsg);
+          if (isPrepayDepleted) {
             throw err;
           }
 
           const isTransient =
-            (status === 503 ||
+            status === 503 ||
             status === 429 ||
-            err?.message?.includes("503") ||
-            err?.message?.includes("high demand")) &&
-            !isQuotaDepleted;
+            rawMsg.includes("503") ||
+            rawMsg.includes("high demand") ||
+            rawMsg.includes("RESOURCE_EXHAUSTED");
 
           if (isTransient && attempt === 0) {
             // Short backoff before second attempt
-            await new Promise((resolve) => setTimeout(resolve, 400));
+            await new Promise((resolve) => setTimeout(resolve, 350));
           } else {
-            break; // Proceed to next candidate model or fallback
+            // Log transition and cascade to the next model in candidateModels
+            console.info(`[Model Fallback] ${modelName} unavailable (${status || "error"}), cascading to older version...`);
+            break;
           }
         }
       }
