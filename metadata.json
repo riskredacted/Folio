@@ -1,0 +1,6 @@
+{
+  "name": "Folio - Literary Character Chat",
+  "description": "A minimalist, book-themed roleplay platform where stories unfold and characters are born directly within the books as they are mentioned.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
