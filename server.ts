@@ -290,7 +290,10 @@ async function startServer() {
       .replace(/\bremains\s+grounded\s+in\s+the\s+facts\s+already\s+established\s+about\s+them\b/gi, "stays watchful at their side")
       .replace(/\bstays\s+watchful\s+at\s+your\s+side\b/gi, "stays watchful at their side")
       .replace(/\bthe\s+air\s+between\s+you\b/gi, "the air between them")
-      .replace(/\bbetween\s+you\b/gi, "between them");
+      .replace(/\bbetween\s+you\b/gi, "between them")
+      // Scrub canned mechanical echo artifacts
+      .replace(/^\s*\*?[^\n*]*The physical momentum jolts through [^\n*]*\*\s*\n*/gi, "")
+      .replace(/^\s*\*?[^\n*]*The words hang in the (?:cold )?air of [^\n*]*\*\s*\n*/gi, "");
 
     return sanitized;
   }
@@ -403,9 +406,11 @@ async function startServer() {
 
   // Graceful fallback synthesizer when Gemini is unavailable
   function createFallbackBookFromIdea(idea: string) {
-    const words = idea.trim().split(/\s+/).filter(Boolean);
-    const titleSnippet = words
-      .slice(0, 5)
+    const cleanIdea = idea.trim().replace(/^["']|["']$/g, "");
+    const words = cleanIdea.split(/\s+/).filter(Boolean);
+    const titleWords = words.filter(w => !/^(?:in|on|at|a|an|the|of|for|with|by|about)$/i.test(w));
+    const titleSnippet = (titleWords.length > 0 ? titleWords : words)
+      .slice(0, 4)
       .join(" ")
       .replace(/[^\w\s]/g, "");
     const formattedTitle =
@@ -413,50 +418,56 @@ async function startServer() {
         ? titleSnippet.replace(/\b\w/g, (c) => c.toUpperCase())
         : "The Unwritten Folio";
 
-    const explicitNames = extractExplicitCharacterNames(idea);
-    const characters = createPremiseCharacters(idea, explicitNames);
+    const explicitNames = extractExplicitCharacterNames(cleanIdea);
+    const characters = createPremiseCharacters(cleanIdea, explicitNames);
     const displayNames = explicitNames.length > 0
       ? explicitNames.join(explicitNames.length === 2 ? " and " : ", ")
       : "the lives at its center";
 
-    const inferredTone = /poetic|verse|lyrical|ballad/i.test(idea)
+    let cleanSetting = cleanIdea;
+    if (/^in\s+a\b/i.test(cleanSetting)) {
+      cleanSetting = cleanSetting.replace(/^in\s+a\b/i, "A");
+    }
+    cleanSetting = cleanSetting.replace(/\badvance\b/i, "advanced");
+    cleanSetting = cleanSetting.charAt(0).toUpperCase() + cleanSetting.slice(1);
+
+    const inferredTone = /poetic|verse|lyrical|ballad/i.test(cleanIdea)
       ? "Poetic & Lyrical"
-      : /formal|court|palace|royal|empire|victorian/i.test(idea)
+      : /formal|court|palace|royal|empire|victorian/i.test(cleanIdea)
         ? "Formal & Aristocratic"
-        : /gritty|noir|crime|detective|street/i.test(idea)
+        : /gritty|noir|crime|detective|street/i.test(cleanIdea)
           ? "Gritty & Blunt"
-          : /academic|professor|research|library|scholar/i.test(idea)
+          : /academic|professor|research|library|scholar/i.test(cleanIdea)
             ? "Scholarly & Analytical"
             : "Casual & Conversational";
+
+    const cleanSynopsis = cleanIdea.length > 0
+      ? cleanIdea.charAt(0).toUpperCase() + cleanIdea.slice(1)
+      : "An unfolding story driven by vivid interactions.";
 
     return {
       title: `The Chronicles of ${formattedTitle}`,
       subtitle: "A Manuscript Born of an Instant Idea",
-      setting: idea.trim(),
+      setting: cleanSetting,
       dialogueTone: inferredTone,
-      synopsis: idea.trim(),
-      prologue: `Morning gathers over the world in its familiar rhythm. ${displayNames} move through it with their history already woven between them.\n\n${idea.trim()}\n\nSomething in that ordinary day is about to change.`,
+      synopsis: cleanSynopsis,
+      prologue: `*Morning settles across ${cleanSetting.toLowerCase().startsWith("a ") ? cleanSetting.toLowerCase() : "the horizon"}, its quiet rhythm establishing the stage for what is to come.*\n\n*${displayNames} move through this world with their history already woven between them—unaware that the choices made before dusk will alter the trajectory of their lives forever.*\n\n*The first page opens in the quiet before the turning tide.*`,
       coverColor: "#7a282f",
       coverIcon: "BookOpen",
       characters,
     };
   }
 
-  // Graceful storytelling narrative generator with deep obedience to director lore and user prompts
+  // Graceful storytelling narrative generator that advances the scene with dynamic dialogue and zero prompt/setting echoing
   function createFallbackNarrative(book: any, userPrompt: string): string {
+    const cleanPrompt = (userPrompt || "").trim();
+    const promptLower = cleanPrompt.toLowerCase();
+
     const chars = Array.isArray(book?.characters) && book.characters.length > 0
       ? book.characters
-      : [{ name: "The Companion", role: "Ally", description: "" }];
+      : [];
 
     const loreText = (book?.loreNotes || "").toLowerCase();
-    const settingText = String(book?.setting || "the established world")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 260);
-    const combinedCanon = [
-      book?.loreNotes || "",
-      ...chars.map((character: any) => `${character?.name || ""}: ${character?.description || ""}`),
-    ].join("\n");
 
     const latestCharacterCanon = (character: any) => {
       const description = String(character?.description || "");
@@ -464,9 +475,9 @@ async function startServer() {
       return matches.length > 0 ? matches[matches.length - 1][1] : description;
     };
 
-    // Identify which characters are restricted from speaking. The newest
-    // Director fact can explicitly reverse an older restriction.
+    // Check if character is constrained from speaking
     const isSilentChar = (c: any) => {
+      if (!c) return false;
       const latestCanon = latestCharacterCanon(c).toLowerCase();
       if (/\b(?:can|may|should)\s+(?:speak|talk)|\bno longer\s+(?:silent|mute)|\b(?:speaks?|talks?)\s+normally\b/i.test(latestCanon)) {
         return false;
@@ -477,187 +488,265 @@ async function startServer() {
              (c?.name && loreText.includes(`${c.name.toLowerCase()} is silent`));
     };
 
-    // Find a speaking character and any silent characters
-    const speakingChars = chars.filter((c: any) => !isSilentChar(c));
-    const silentChars = chars.filter((c: any) => isSilentChar(c));
+    // Extract names explicitly mentioned in user prompt
+    const promptNames = extractExplicitCharacterNames(cleanPrompt);
 
-    const promptLower = (userPrompt || "").toLowerCase();
-    // Check if user specifically addressed or interacted with a named character
-    let addressedChar = chars.find((c: any) => {
+    // Identify active characters
+    const mentionedFromBook = chars.filter((c: any) => {
       if (!c?.name) return false;
-      const parts = c.name.toLowerCase().split(/\s+/);
-      return promptLower.includes(c.name.toLowerCase()) ||
-        parts.some((part: string) => part.length >= 3 && new RegExp(`\\b${part}\\b`, "i").test(promptLower));
-    }) || null;
+      const nameLower = c.name.toLowerCase();
+      return promptLower.includes(nameLower) || promptNames.some(pn => pn.toLowerCase() === nameLower);
+    });
 
-    const activeSpeaker = (addressedChar && !isSilentChar(addressedChar))
-      ? addressedChar.name
-      : (speakingChars[0]?.name || (chars[0]?.name && !isSilentChar(chars[0]) ? chars[0].name : "Someone nearby"));
+    let charA: any = null;
+    let charB: any = null;
 
-    const activeSilent = silentChars.length > 0 ? silentChars[0].name : null;
-    const cleanPrompt = userPrompt.trim();
+    if (mentionedFromBook.length >= 2) {
+      charA = mentionedFromBook[0];
+      charB = mentionedFromBook[1];
+    } else if (mentionedFromBook.length === 1) {
+      charA = mentionedFromBook[0];
+      const otherInBook = chars.find((c: any) => c?.name && c.name.toLowerCase() !== charA.name.toLowerCase());
+      if (otherInBook) {
+        charB = otherInBook;
+      } else if (promptNames.length >= 2) {
+        const otherName = promptNames.find(pn => pn.toLowerCase() !== charA.name.toLowerCase()) || "Companion";
+        charB = { name: otherName, role: "Companion", voiceTone: "Sarcastic & Witty" };
+      } else {
+        charB = { name: "The Companion", role: "Companion", voiceTone: "Casual & Conversational" };
+      }
+    } else if (promptNames.length >= 2) {
+      charA = { name: promptNames[0], role: "Lead Character", voiceTone: "Casual & Conversational" };
+      charB = { name: promptNames[1], role: "Companion", voiceTone: "Sarcastic & Witty" };
+    } else if (promptNames.length === 1) {
+      charA = { name: promptNames[0], role: "Lead Character", voiceTone: "Casual & Conversational" };
+      charB = chars[0] || { name: "The Companion", role: "Companion", voiceTone: "Sarcastic & Witty" };
+    } else if (chars.length >= 2) {
+      charA = chars[0];
+      charB = chars[1];
+    } else if (chars.length === 1) {
+      charA = chars[0];
+      charB = { name: "The Companion", role: "Companion", voiceTone: "Sarcastic & Witty" };
+    } else {
+      charA = { name: "William", role: "Lead Student", voiceTone: "Casual & Conversational" };
+      charB = { name: "Gabrielle", role: "Fellow Student", voiceTone: "Sarcastic & Witty" };
+    }
 
-    // Check if user input is dialogue, action, or combined
+    const nameA = charA.name;
+    const nameB = charB.name;
+    const toneA = String(charA.voiceTone || book?.dialogueTone || "Casual & Conversational").toLowerCase();
+    const toneB = String(charB.voiceTone || (toneA.includes("sarcastic") ? "Casual & Conversational" : "Sarcastic & Witty")).toLowerCase();
+
+    const silentA = isSilentChar(charA);
+    const silentB = isSilentChar(charB);
+
+    // Dialogue input check
     const dialogueMatch = cleanPrompt.match(/"([^"]+)"|“([^”]+)”/);
     let spokenText = dialogueMatch ? (dialogueMatch[1] || dialogueMatch[2]) : null;
-    if (!spokenText && (/\?$/.test(cleanPrompt) || /^(say|ask|whisper|tell|demand|shout|call)\b/i.test(cleanPrompt) || (addressedChar && !/^\*[^*]+\*$/.test(cleanPrompt)))) {
+    if (!spokenText && (/\?$/.test(cleanPrompt) || /^(say|ask|whisper|tell|demand|shout|call)\b/i.test(cleanPrompt))) {
       spokenText = cleanPrompt.replace(/^\*[^*]+\*,?\s*/, "").replace(/^["'\s]+|["'\s]+$/g, "");
     }
 
-    const protectiveChar = chars.find((character: any) =>
-      /\bprotective\b/i.test(latestCharacterCanon(character)) &&
-      !/\b(?:not|no longer)\s+protective\b/i.test(latestCharacterCanon(character))
-    );
-    const shyChar = chars.find((character: any) =>
-      /\b(?:shy|reserved|timid)\b/i.test(latestCharacterCanon(character)) &&
-      !/\b(?:not|no longer)\s+(?:shy|reserved|timid)\b/i.test(latestCharacterCanon(character))
-    );
-    const otherCharacter = protectiveChar
-      ? chars.find((character: any) => character?.name !== protectiveChar.name)
-      : chars.find((character: any) => character?.name !== activeSpeaker);
-    const relationshipBeat = protectiveChar && otherCharacter
-      ? `${protectiveChar.name}${shyChar?.name === protectiveChar.name ? " hesitates at first, reserved and watchful, but" : ""} stays close to ${otherCharacter.name}, visibly protective without taking control away from them.`
-      : /\bbest\s*friends?\b/i.test(combinedCanon) && chars.length >= 2
-        ? `${chars[0].name} and ${chars[1].name} move with the instinctive familiarity of longtime best friends.`
-        : chars.length === 1
-          ? `${chars[0].name} stays close, watching the perimeter with quiet vigilance.`
-          : `${chars.map((character: any) => character.name).filter(Boolean).slice(0, 2).join(" and ") || "Those present"} hold their ground with watchful wariness.`;
-
+    // Genre & Environmental cues (derived from themes, not dumped verbatim)
     const genreStr = `${book?.genre || ""} ${book?.setting || ""} ${book?.title || ""}`.toLowerCase();
-    const isSciFi = /sci-fi|space|cyber|futur|station|star|orbit|ship|horizon|hull/i.test(genreStr);
+    const isSciFi = /sci-fi|space|cyber|futur|station|star|orbit|ship|hull|trans-orbit|cyberpunk/i.test(genreStr);
     const isGothic = /gothic|victorian|mystery|detective|investigation|occult|archives|manor|estate|highgate|belvoir/i.test(genreStr);
-    const isFantasy = /fantasy|magic|wizard|sorcer|sword|castle|dragon|alchem|realm/i.test(genreStr);
+    const isFantasy = /fantasy|magic|wizard|sorcer|sword|castle|dragon|alchem|realm|kingdom/i.test(genreStr);
 
-    // Genre-tailored sensory hooks and unexpected escalating ripples
-    const sensoryRipple = isSciFi
-      ? "Down the corridor, a pressurized valve lets out a sudden hydraulic hiss. The atmospheric scrubbers cycle with a low, thrumming shudder, and an auxiliary monitor blinks awake with an unacknowledged proximity alert."
-      : isGothic
-        ? "Outside, a sudden squall whips rain against the tall windowpanes, rattling the leaded glass. From somewhere deep in the foundation, the low groan of settling timber is answered by the sharp, distant snap of a closing iron latch."
-        : isFantasy
-          ? "The shadows along the stonework waver as an unnatural chill stirs the torchlight. Across the flagstones, a thin tracery of old dust swirls in an unseen draft, gathering around the threshold like iron filings to a lodestone."
-          : "The air between them tightens with immediate consequence. In the distance, the heavy scrape of a closing gate echoes down the street, signaling that the window of opportunity is rapidly shutting.";
+    // Intent detection
+    const isWalkingOrTransit = /\b(?:walk|walking|walked|stroll|strolling|strolled|wander|wandering|pace|pacing|footsteps|stride|campus|grounds?|courtyard|corridor|hallway|path|avenue|street|sidewalk|quad|casual|casually|talking|moving)\b/i.test(cleanPrompt);
+    const isInvestigation = /\b(?:search|searching|searched|investigate|investigating|inspect|inspecting|examine|examining|check|checking|checked|look|looking|terminal|screen|file|files|locker|read|reading|find|found|study|studying|lab|note|notes|data|records?)\b/i.test(cleanPrompt);
+    const isCombatOrAction = /\b(?:fight|fighting|fought|strike|striking|struck|attack|attacking|attacked|hit|punch|kick|kicked|run|running|ran|flee|fleeing|escape|chase|chasing|hide|hiding|dodge|dodging|blast|shoot|blade|weapon|gun|door|breach)\b/i.test(cleanPrompt);
+    const isDowntimeOrRest = /\b(?:coffee|cafe|cafeteria|lunch|bench|sit|sitting|eat|drink|lounge|table|rest|pause|waiting|wait)\b/i.test(cleanPrompt);
 
-    // 1. User is speaking to a silent character
-    if (spokenText && addressedChar && isSilentChar(addressedChar)) {
-      const targetCharName = otherCharacter?.name || chars.find((c: any) => c?.name !== addressedChar?.name)?.name || "their companion";
-      return `*The words hang in the cold air of ${settingText}.*
+    const getToneLine = (speakerName: string, tone: string, scenario: "walk_a" | "walk_b" | "search_a" | "search_b" | "combat_a" | "combat_b" | "rest_a" | "rest_b" | "dialogue_reply"): string => {
+      const isCasual = /casual|conversational|relaxed|modern/i.test(tone);
+      const isSarcastic = /sarcastic|witty|ironic|snarky/i.test(tone);
+      const isScholarly = /scholarly|analytical|academic|logical/i.test(tone);
+      const isGritty = /gritty|blunt|rough|hardboiled/i.test(tone);
+      const isFormal = /formal|aristocratic|stately|noble/i.test(tone);
+      const isPoetic = /poetic|lyrical|verse/i.test(tone);
+      const isCryptic = /cryptic|whispering|mystic/i.test(tone);
 
-*${addressedChar.name} does not answer aloud—their silence is deliberate, unyielding, and absolute. Yet their eyes lock onto ${targetCharName} with sharp comprehension. With a slow, calculated motion, ${addressedChar.name} steps past into the corridor and gestures toward the darkened entryway, indicating that the move just initiated has already forced the next decision into play.*
+      switch (scenario) {
+        case "walk_a":
+          if (isSarcastic) return `"I love how completely normal our days are turning out to be," ${speakerName} quipped, looking up with dry amusement. "Truly, a masterclass in staying under the radar."`;
+          if (isScholarly) return `"The sequence doesn't add up if you evaluate the timeline objectively," ${speakerName} observed quietly, watching the path ahead. "There was an intentional forty-minute gap between the alert and the response."`;
+          if (isGritty) return `"Keep your chin up and don't look like you're searching for an exit," ${speakerName} warned in an undertone. "People pick up on nerves faster than you think."`;
+          if (isFormal) return `"One cannot help but note the heightened scrutiny currently directed toward our sector," ${speakerName} remarked with measured composure.`;
+          if (isPoetic) return `"Even the air carries an unquiet pulse today," ${speakerName} murmured softly, watching leaves swirl across the stone. "As if the horizon itself is waiting for an excuse to break."`;
+          if (isCryptic) return `"Listen to the rhythm of the footfalls around us," ${speakerName} whispered, eyes half-lidded. "The crowd walks fast, but what trails them walks faster."`;
+          return `"You know everyone's talking about what happened yesterday, right?" ${speakerName} remarked, glancing sideways with an easy grin. "By tomorrow morning, half the place is going to think we planned the whole thing from the start."`;
 
-*${sensoryRipple}*
+        case "walk_b":
+          if (isCasual) return `"Honestly? I'm not going to lose sleep over it," ${speakerName} laughed softly, adjusting their stride. "We did what made sense at the time. As long as we stick together, the rumors will burn themselves out."`;
+          if (isScholarly) return `"Precisely why we need to verify the primary records before noon," ${speakerName} countered, tapping a finger against their sleeve. "If the discrepancy is logged officially, our margin for error drops to zero."`;
+          if (isGritty) return `"Let them watch," ${speakerName} muttered, jaw set as they scanned the crowd without turning their head. "Watching doesn't mean they know what's coming. We stick to the route."`;
+          if (isFormal) return `"A prudent assessment," ${speakerName} agreed with a slight incline of the head. "However, let us ensure our demeanor remains entirely unreadable to curious onlookers."`;
+          if (isPoetic) return `"Then let the rumor run like wild grass before the flame," ${speakerName} replied, a quiet smile gracing their lips. "The truth has deeper roots than idle talk."`;
+          if (isCryptic) return `"Let them speak of yesterday," ${speakerName} answered softly. "Yesterday is an empty shell. It is tomorrow that has already drawn its blade."`;
+          return `"Let them speculate," ${speakerName} answered smoothly, tilting their head back with an unbothered smirk. "Panic keeps people observant. Besides, if anyone actually had the courage to ask us directly, they wouldn't like the answers anyway."`;
 
-*${relationshipBeat}*`;
-    }
+        case "search_a":
+          if (isSarcastic) return `"Well, look at that. Someone actually went through the trouble of hiding something," ${speakerName} said with a wry grin. "Ten points for effort, zero points for originality."`;
+          if (isScholarly) return `"Notice the alignment of the seal," ${speakerName} pointed out, leaning in to examine the mechanism. "The wear patterns indicate recent access—likely within the last twenty-four hours."`;
+          if (isGritty) return `"Got something," ${speakerName} grunted, keeping one hand free as they checked the compartment. "Take a look, but make it fast. We don't have all day."`;
+          if (isFormal) return `"Remarkable. This registry was clearly intended to remain concealed from general scrutiny," ${speakerName} observed with measured poise.`;
+          return `"Found something," ${speakerName} said under their breath, pulling the drawer clear. "Take a look at this—it's dated from earlier this morning."`;
 
-    // 2. Standard User dialogue
-    const activeCharObj = chars.find((c: any) => c?.name === activeSpeaker) || addressedChar || speakingChars[0] || chars[0] || null;
-    const toneRaw = String(activeCharObj?.voiceTone || book?.dialogueTone || "").toLowerCase();
+        case "search_b":
+          if (isCasual) return `"Wait, are you serious? Let me see that," ${speakerName} said, stepping in closer. "If that's what I think it is, someone's in deep trouble."`;
+          if (isScholarly) return `"Cross-reference the serial numbers with the primary index," ${speakerName} urged quietly. "If the signatures match, we've found the source of the leak."`;
+          if (isGritty) return `"Pocket it and shut the latch," ${speakerName} said, eyes darting toward the entryway. "Don't leave fingerprints, and get moving."`;
+          if (isFormal) return `"We must handle this with the utmost delicacy," ${speakerName} cautioned softly. "Possession of such documentation carries severe ramifications."`;
+          return `"Don't just stand there admiring it," ${speakerName} murmured with a quick smirk. "Memorize what you need and let's clear out before the watch rotates."`;
 
-    const isCasualTone = /casual|conversational|relaxed|modern|informal/i.test(toneRaw);
-    const isPoeticTone = /poetic|lyrical|verse|melodic|bardic/i.test(toneRaw);
-    const isFormalTone = /formal|aristocratic|stately|noble|courtly|proper|regal|high english/i.test(toneRaw);
-    const isGrittyTone = /gritty|blunt|rough|hardboiled|street|clipped/i.test(toneRaw);
-    const isScholarlyTone = /scholarly|analytical|academic|intellectual|scientific|logical/i.test(toneRaw);
-    const isCrypticTone = /cryptic|whispering|mystic|riddle|prophet|shadowy/i.test(toneRaw);
-    const isSarcasticTone = /sarcastic|witty|ironic|cynical|snarky/i.test(toneRaw);
+        case "combat_a":
+          if (isSarcastic) return `"Right, because talking it out like civilized people was just too boring," ${speakerName} called out, bracing their stance with a sharp grin.`;
+          if (isScholarly) return `"Their formation is fractured—focus on the flank!" ${speakerName} directed, analyzing the opening with calm precision.`;
+          if (isGritty) return `"Down, now!" ${speakerName} barked, slamming forward to hold the line. "Move your feet or get dragged!"`;
+          if (isFormal) return `"Hold your ground!" ${speakerName} commanded with authoritative composure. "Maintain distance and exploit their overreach."`;
+          return `"On your guard!" ${speakerName} shouted, shifting weight to meet the incoming rush. "Here they come!"`;
 
-    if (spokenText) {
-      const isQuestion = /\?|\b(?:who|what|where|why|how|did|is|are|can|could|would|will|which)\b/i.test(spokenText);
-      let activeNPCReply = "";
+        case "combat_b":
+          if (isCasual) return `"Already on it!" ${speakerName} yelled back, sidestepping the recoil and locking down the opening. "Watch your left!"`;
+          if (isScholarly) return `"Targeting vector established," ${speakerName} reported, executing the counter-move without hesitation. "Push through while they recalibrate!"`;
+          if (isGritty) return `"Clear the lane!" ${speakerName} snarled, executing the strike with ruthless momentum. "Go, go, go!"`;
+          if (isFormal) return `"Understood. Securing the perimeter forthwith," ${speakerName} answered with razor focus.`;
+          return `"Covering you now!" ${speakerName} called back, seizing the advantage before the counter-attack could form.`;
 
-      if (isCasualTone) {
-        activeNPCReply = isQuestion
-          ? `"Look, you're asking the one thing everyone around here is trying to sweep under the rug," ${activeSpeaker} says, leaning in with a quick grin and lowering their voice. "The truth is, whoever pulled this off knew exactly what they were doing—and they left us holding the bag."`
-          : `"Alright, yeah, I'm with you on that," ${activeSpeaker} replies with a nod, cracking their knuckles. "If we're really gonna do this, we better move before the whole block catches on."`;
-      } else if (isPoeticTone) {
-        activeNPCReply = isQuestion
-          ? `"You seek the song the quiet earth refuses to sing," ${activeSpeaker} speaks, words falling like rain upon velvet, their gaze lingering on the trembling shadows. "The veil was not torn by chance; it was parted by an ancient longing, and the wound in the dark bleeds memory."`
-          : `"Then let the stars bear witness to this hour," ${activeSpeaker} murmurs softly, a quiet reverie blooming in their eyes. "We step upon a thread of silver, where every breath is a vow and every shadow a slumbering verse."`;
-      } else if (isFormalTone) {
-        activeNPCReply = isQuestion
-          ? `"You inquire into a matter that decorum—and the highest authorities—expressly forbade from public record," ${activeSpeaker} remarks with immaculate composure, adjusting their cuffs without haste. "I assure you, the records were not misplaced; they were expunged with deliberate, calculated precision."`
-          : `"Very well. Your proposal is both prudent and entirely acceptable," ${activeSpeaker} replies with a dignified inclination of the head. "Let us proceed with the requisite discretion, lest untoward scrutiny compromise our objective."`;
-      } else if (isGrittyTone) {
-        activeNPCReply = isQuestion
-          ? `"Cut the noise," ${activeSpeaker} snarls, spitting to the side and glancing toward the doorway. "You already know damn well who did it. The bastards took what they wanted, burned the rest, and left us to bleed."`
-          : `"Done," ${activeSpeaker} grunts, checking the cylinder of their piece. "Quit talking and get moving. We got two minutes before this place crawls with trouble."`;
-      } else if (isScholarlyTone) {
-        activeNPCReply = isQuestion
-          ? `"The inquiry is statistically inevitable, given the anomalous readings," ${activeSpeaker} notes, tracing an index finger across the schematics with precise focus. "Notice the fracture pattern: the stress was not externally applied, but synthesized from within the apparatus itself."`
-          : `"The hypothesis holds, and empirical conditions favor immediate execution," ${activeSpeaker} states evenly, making a swift notation. "Provided our margin of error remains within acceptable bounds, this trajectory minimizes risk."`;
-      } else if (isCrypticTone) {
-        activeNPCReply = isQuestion
-          ? `"The raven asks of the cage what the key has long forgotten," ${activeSpeaker} whispers from the hollow gloom, their smile thin and veiled. "Listen beneath the floorboards... it was never stolen. It was offered willingly to the dark."`
-          : `"The thread is pulled, and the tapestry unravels," ${activeSpeaker} sibilates, fingers tracing an invisible circle in the dust. "Go forward, then. But do not look back when the mirror begins to answer."`;
-      } else if (isSarcasticTone) {
-        activeNPCReply = isQuestion
-          ? `"Oh, fantastic question. Truly, a masterpiece of timing," ${activeSpeaker} says with an amused roll of their eyes. "Would you also like me to ask the assassins nicely if they'd mind waiting outside while we figure it out?"`
-          : `"Brilliant plan. What could possibly go wrong besides, well, literally everything?" ${activeSpeaker} quips with a dry smirk, already checking the latch. "Lead the way, genius. I'll be right behind you taking notes for the eulogy."`;
-      } else {
-        activeNPCReply = isQuestion
-          ? (isSciFi
-              ? `"You're asking the one question the station log was wiped to hide," ${activeSpeaker} says under their breath, tapping a rapid override into their console. "Look at the power draw—someone didn't just take the data, they severed the telemetry lines from this exact deck."`
-              : isGothic
-                ? `"Lower your voice," ${activeSpeaker} warns, stepping closer as their eyes dart toward the transom above the door. "You're asking about the one ledger that was never entered into the public registry. Look closely at the desk—the lock wasn't picked. It was melted from the inside."`
-                : isFantasy
-                  ? `"Because the sigil was broken before nightfall," ${activeSpeaker} answers grimly, a hand resting on their scabbard. "The seal didn't shatter on its own. Someone on our side gave them the pass-phrase."`
-                  : `"You know the answer as well as I do," ${activeSpeaker} murmurs, tension hard in their jaw. "The moment we spoke that name aloud, we gave up the luxury of retreat. We have maybe three minutes before their watchers report in."`)
-          : (isSciFi
-              ? `"Acknowledged. Setting the trajectory now," ${activeSpeaker} replies, their fingers moving without hesitation across the control interface. "If we're breaching that sector, we need to move before their automated quarantine protocol kicks in."`
-              : isGothic
-                ? `"Then it's settled," ${activeSpeaker} says, voice low and resolute as they button their heavy wool coat against the draft. "We take the eastern passageway before the night watch changes. But take heed: whatever is buried in that archive, it won't remain quiet once disturbed."`
-                : isFantasy
-                  ? `"So be it," ${activeSpeaker} whispers, their eyes catching the amber glow of the fire. "We take the road through the lower pass. Draw your steel, and don't trust any shadow that moves against the wind."`
-                  : `"Consider it done," ${activeSpeaker} says, stepping into motion with decisive focus. "We follow through on this right now, before anyone has the chance to organize a counter-move."`);
+        case "rest_a":
+          if (isSarcastic) return `"If sitting here doing absolutely nothing is a crime, lock me up," ${speakerName} sighed, leaning back against the bench with visible relief.`;
+          if (isScholarly) return `"Even thirty minutes of downtime should allow us to consolidate our findings," ${speakerName} noted, setting down their notes with calculated care.`;
+          if (isGritty) return `"Sit, catch your breath, and stay alert," ${speakerName} muttered, taking a sip from the cup without relaxing their posture.`;
+          if (isFormal) return `"A momentary respite is both well-earned and strategically advantageous," ${speakerName} remarked, resting hands atop the table.`;
+          return `"Finally, a minute to actually think," ${speakerName} breathed, settling onto the bench and letting the tension bleed from their shoulders.`;
+
+        case "rest_b":
+          if (isCasual) return `"Don't get too comfortable," ${speakerName} laughed, taking a seat opposite. "Knowing our luck, we've got about five minutes before something else catches on fire."`;
+          if (isSarcastic) return `"Enjoy the peace while it lasts," ${speakerName} replied with a deadpan grin. "In five minutes, someone is definitely going to ruin it."`;
+          if (isScholarly) return `"Agreed. Let us review the primary objectives while we remain undisturbed," ${speakerName} replied, leaning forward in focused discussion.`;
+          if (isGritty) return `"Drink your coffee," ${speakerName} grunted. "Soon as that bell rings, we're back on the clock."`;
+          if (isFormal) return `"Indeed. Let us utilize this interlude to prepare for what inevitably lies ahead," ${speakerName} agreed smoothly.`;
+          return `"Tell me about it," ${speakerName} replied with an easy chuckle, settling in. "So what's the plan once the afternoon sessions start?"`;
+
+        case "dialogue_reply":
+          if (isSarcastic) return `"Oh, fantastic question. Let's debate that while the clock is ticking," ${speakerName} remarks with a dry smirk. "Tell you what: if we make it through the afternoon, I'll buy you a coffee and we can dissect it in detail."`;
+          if (isScholarly) return `"The premise holds, but your conclusion overlooks the primary variable," ${speakerName} notes, eyes narrowing in thought. "Whoever authorized that transfer had elevated credentials. We should assume our movements are already logged."`;
+          if (isGritty) return `"Keep your voice down," ${speakerName} grunts, eyes flicking toward the perimeter. "Walls have ears, and we don't have the luxury of being careless right now."`;
+          if (isFormal) return `"A valid inquiry," ${speakerName} replies with immaculate composure. "However, discretion dictates that we reserve our conclusions until the evidence has been thoroughly corroborated."`;
+          if (isPoetic) return `"You ask of the wind what only the roots can answer," ${speakerName} murmurs softly, gaze lingering on the trembling shadows. "The truth was not misplaced; it was sealed away before the sun rose."`;
+          if (isCryptic) return `"The answer is already written where you refuse to look," ${speakerName} whispers, a faint smile touching their lips. "Listen beneath the noise. It was never an accident."`;
+          return `"Look, you're asking the one thing everyone around here is trying to sweep under the rug," ${speakerName} says, leaning in with a quick grin and lowering their voice. "The truth is, whoever pulled this off knew exactly what they were doing."`;
       }
+    };
 
-      return `*The words hang in the air of ${settingText}, demanding an immediate answer.*
+    // 1. Direct Spoken Dialogue
+    if (spokenText) {
+      const activeRespondent = silentB ? (silentA ? null : nameA) : nameB;
+      const respondentTone = activeRespondent === nameA ? toneA : toneB;
+      const otherPerson = activeRespondent === nameA ? nameB : nameA;
 
-${activeNPCReply}
-
-*${sensoryRipple}*
-
-*${relationshipBeat}${activeSilent ? ` ${activeSilent} stays watchful at the perimeter, communicating urgency through a sharp, warning nod.` : ""}*`;
-    }
-
-    // 3. User action or narrative directive
-    const actionClean = cleanPrompt.replace(/^[*_]|[*_]$/g, "").trim();
-    const actionDesc = actionClean.length > 0
-      ? (actionClean.charAt(0).toUpperCase() + actionClean.slice(1)).replace(/\.+$/, "")
-      : "The decisive step is taken";
-
-    let reactionDialogue = "";
-    if (isCasualTone) {
-      reactionDialogue = `"Whoa, hey, that actually worked," ${activeSpeaker} laughs, shaking their head in disbelief. "Don't just stand there staring—come on, grab your gear before someone notices!"`;
-    } else if (isPoeticTone) {
-      reactionDialogue = `"Behold how swiftly destiny answers," ${activeSpeaker} breathes, as if watching petals scatter on water. "The seal has broken, and from its ashes, the dawn of something untamed begins to stir."`;
-    } else if (isFormalTone) {
-      reactionDialogue = `"An impressive execution," ${activeSpeaker} observes, tone calm yet unmistakably impressed. "The obstacle has been decisively removed. I suggest we capitalize upon this advantage forthwith."`;
-    } else if (isGrittyTone) {
-      reactionDialogue = `"Down, now!" ${activeSpeaker} barks, slamming a shoulder against the frame to hold the line. "Door's kicked in, but the real fight just started. Move your feet!"`;
-    } else if (isScholarlyTone) {
-      reactionDialogue = `"Fascinating," ${activeSpeaker} murmurs, eyes scanning the immediate physical aftermath. "The kinetic transfer exceeded initial calculations by roughly thirty percent. We must document the structural variance immediately."`;
-    } else if (isCrypticTone) {
-      reactionDialogue = `"It is awakened," ${activeSpeaker} breathes, cold eyes gleaming from beneath the cowl. "The seal splits, and the bell tolls for what sleeps beneath. Walk softly... it is already listening."`;
-    } else if (isSarcasticTone) {
-      reactionDialogue = `"Well, look at that. You didn't blow us both up," ${activeSpeaker} remarks with a theatrical slow clap. "Ten points for style, zero points for stealth. Shall we take a bow before the guards arrive, or run?"`;
-    } else {
-      reactionDialogue = isSciFi
-        ? `"Breach confirmed," ${activeSpeaker} reports, their pulse rifle coming up to cover the sector. "Look at the bulkhead seam—that mechanism just tripped an encrypted sequence. We've got company coming down the service shaft."`
+      const para1 = `*The words hang between them in the charged air, demanding an immediate answer.*`;
+      const para2 = activeRespondent
+        ? getToneLine(activeRespondent, respondentTone, "dialogue_reply")
+        : `*${nameB} remains completely silent, their expression unyielding and guarded. A sharp, intentional gesture toward the corridor conveys all the urgency that spoken words never could.*`;
+      const para3 = otherPerson && !silentA && activeRespondent !== nameA
+        ? `*${nameA} catches the subtle shift in tempo, matching stride and keeping eyes fixed on the surrounding space as the conversation deepens.*`
+        : `*The silence settles with palpable weight, shifting the momentum into the next decision.*`;
+      const para4 = isSciFi
+        ? `*Down the concourse, an auxiliary monitor flashes an amber priority alert, its low audio chime cutting through the hum of the deck.*`
         : isGothic
-          ? `"By the saints," ${activeSpeaker} breathes, stepping in to examine the immediate result. "Look at what was concealed behind the panel—the wax is still warm. Someone was standing right here moments before we entered."`
+          ? `*From somewhere deep in the old masonry, the heavy clang of a closing iron gate echoes, signaling that the window for hesitation has passed.*`
           : isFantasy
-            ? `"It's done," ${activeSpeaker} whispers, breath rising white against the cold air as they draw their blade. "The barrier yielded. But listen—the wards on the upper parapet are vibrating. They know we've broken through."`
-            : `"That did it," ${activeSpeaker} says, voice tight with adrenaline as they secure the flank. "The advantage is ours, but only if we push through right now before they recover."`;
+            ? `*A sudden chill stirs the torchlight along the arches, carrying the faint, unmistakable scrape of steel being drawn from a scabbard.*`
+            : `*Ahead, near the department entrance, a figure in a dark jacket pauses by the notice boards, glancing back in their direction before quickening their pace.*`;
+
+      return [para1, para2, para3, para4].join("\n\n");
     }
 
-    return `*${actionDesc}. The physical momentum jolts through ${settingText}, triggering an immediate chain reaction.*
+    // 2. Walking / Campus / Strolling / Transit
+    if (isWalkingOrTransit) {
+      const para1 = isSciFi
+        ? `*Overhead light strips bathed the transit concourse in cool luminescence as automated air scrubbers hummed within the bulkheads. ${nameA} and ${nameB} walked in steady synchronization across the reinforced polymer decking, their footfalls rhythmically echoing.*`
+        : isGothic
+          ? `*An autumn mist clung to the weathered stone arches along the quadrangle, dampening the scrape of boot heels against the flagstones. ${nameA} and ${nameB} walked shoulder-to-shoulder beneath the shadow of tall leaded windows, breath misting lightly in the cold air.*`
+          : isFantasy
+            ? `*Sunlight broke across the high battlements, casting long shadows over the cobblestones as merchants and messengers hurried past. ${nameA} and ${nameB} wove through the outer courtyard with steady, measured strides.*`
+            : `*A brisk breeze rustled through the trees lining the central courtyard, scattering pale leaves across the paved walkways as clusters of students drifted between lecture halls. ${nameA} walked with an easy, unhurried stride, hands loosely in his pockets, while ${nameB} kept pace alongside him under the cool autumn sky.*`;
 
-${reactionDialogue}
+      const para2 = silentA
+        ? `*${nameA} walked in deliberate silence, his expression calm and observant, conveying his thoughts with a subtle tilt of his head toward the central hall.*`
+        : getToneLine(nameA, toneA, "walk_a");
 
-*${sensoryRipple}*
+      const para3 = silentB
+        ? `*${nameB} offered no spoken reply, keeping a watchful eye on the perimeter while matching his stride without a moment's hesitation.*`
+        : getToneLine(nameB, toneB, "walk_b");
 
-*${relationshipBeat}${activeSilent ? ` ${activeSilent} keeps their silence, hands ready and eyes tracking the doorway for the immediate backlash.` : ""}*`;
+      const para4 = isSciFi
+        ? `*A sharp audio alert chimed from ${nameB}'s terminal link, flashing an amber priority glyph. Down the concourse, the automated security checkpoint shifted into active scan mode, sweeping twin sensor bars across the oncoming crowd.*`
+        : isGothic
+          ? `*The tolling of the distant chapel bell signaled the quarter hour, its iron tone vibrating through the stone. From the darkened doorway of the old archive hall, the rustle of turning parchment abruptly stopped as their footsteps drew near.*`
+          : isFantasy
+            ? `*A sudden hush fell over the nearby stalls as an armored courier wheeled past, clutching a scroll bearing the silver seal of the magistrate. Two observers detached themselves from the wall, falling into step thirty paces behind.*`
+            : `*Ahead of them, near the steps leading to the main hall, a sudden chime from the digital bulletin board cut through the chatter as a fresh announcement flashed across the screen. At the same moment, a familiar student in a heavy dark jacket stepped away from the pillars, making brief, pointed eye contact before ducking into the east concourse.*`;
+
+      return [para1, para2, para3, para4].join("\n\n");
+    }
+
+    // 3. Investigation / Searching / Examination
+    if (isInvestigation) {
+      const para1 = `*The mechanism yields with a muted metallic click, revealing a recessed compartment packed with sealed documents and an unflagged digital drive.*`;
+      const para2 = silentA
+        ? `*${nameA} points directly to the timestamp on the upper casing, eyebrows raised in silent warning.*`
+        : getToneLine(nameA, toneA, "search_a");
+      const para3 = silentB
+        ? `*${nameB} nods once, already watching the doorway and signaling urgency with a sharp gesture.*`
+        : getToneLine(nameB, toneB, "search_b");
+      const para4 = `*In the corridor outside, the sudden sound of heavy boots striking the floorboards announces an approaching patrol, cutting short any further inspection.*`;
+
+      return [para1, para2, para3, para4].join("\n\n");
+    }
+
+    // 4. Combat / Action / Pursuit
+    if (isCombatOrAction) {
+      const para1 = `*The sudden impact shatters the tense stillness, sending a shockwave of motion across the room as boots skid against the floor to secure immediate positioning.*`;
+      const para2 = silentA
+        ? `*${nameA} launches forward without a sound, intercepting the line of sight and locking down the forward approach.*`
+        : getToneLine(nameA, toneA, "combat_a");
+      const para3 = silentB
+        ? `*${nameB} secures the flank in rigid silence, weapon readied and eyes tracking every micro-movement.*`
+        : getToneLine(nameB, toneB, "combat_b");
+      const para4 = `*From the shadows beyond the threshold, reinforcements begin to converge, their silhouettes cutting through the flickering light.*`;
+
+      return [para1, para2, para3, para4].join("\n\n");
+    }
+
+    // 5. Downtime / Rest / Cafeteria
+    if (isDowntimeOrRest) {
+      const para1 = `*The ambient murmur of conversation filters through the seating area as steam rises from hot mugs onto the polished tabletop.*`;
+      const para2 = silentA
+        ? `*${nameA} sets down his cup in measured silence, observing the room with steady vigilance.*`
+        : getToneLine(nameA, toneA, "rest_a");
+      const para3 = silentB
+        ? `*${nameB} takes a seat across from him, leaning in to review the situation.*`
+        : getToneLine(nameB, toneB, "rest_b");
+      const para4 = `*A sudden ping from the table terminal disrupts the lull, displaying an unread transmission addressed specifically to the two of them.*`;
+
+      return [para1, para2, para3, para4].join("\n\n");
+    }
+
+    // 6. General / Story Advancement
+    const para1 = `*The momentum shifts forward as ${nameA} and ${nameB} navigate the unfolding scene, every movement deliberate under the watchful eyes of their surroundings.*`;
+    const para2 = silentA
+      ? `*${nameA} takes the lead in silence, his posture resolute and focused on the objective ahead.*`
+      : getToneLine(nameA, toneA, "walk_a");
+    const para3 = silentB
+      ? `*${nameB} keeps stride beside him, readiness evident in every step.*`
+      : getToneLine(nameB, toneB, "walk_b");
+    const para4 = `*An unexpected development unfolds before them, opening a new path while closing the door on retreat.*`;
+
+    return [para1, para2, para3, para4].join("\n\n");
   }
 
   // Graceful storytelling passage rewrite generator with deep instruction understanding
@@ -1701,9 +1790,25 @@ IMPORTANT: Output ONLY the raw JSON object, without markdown code fences.`;
       const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
 
       if (!client) {
+        const fallbackChars: Array<{ name: string; role: string; description: string; voiceTone?: string }> = [];
+        if (lastUserMsg) {
+          const explicitInMsg = extractExplicitCharacterNames(lastUserMsg);
+          const existingNames = new Set((book?.characters || []).map((c: any) => c?.name?.toLowerCase()));
+          for (const name of explicitInMsg) {
+            if (!existingNames.has(name.toLowerCase())) {
+              fallbackChars.push({
+                name,
+                role: /\b(?:college|university|school|academy|campus)\b/i.test(book?.setting || lastUserMsg) ? "Student" : "Character",
+                description: "Introduced in the scene.",
+                voiceTone: book?.dialogueTone || "Casual & Conversational",
+              });
+              existingNames.add(name.toLowerCase());
+            }
+          }
+        }
         return res.json({
-          reply: createFallbackNarrative(book, lastUserMsg),
-          newCharacters: [],
+          reply: sanitizeNarrativeOutput(createFallbackNarrative(book, lastUserMsg), book),
+          newCharacters: fallbackChars,
         });
       }
 
@@ -1759,9 +1864,10 @@ ${leadCharName ? `Lead Point-of-View Character: ${leadCharName}` : ""}
 
 THE NARRATOR'S CREED & PRIME DIRECTIVE:
 1. YOU ARE THE LIVING NARRATOR: Your sacred identity and absolute duty is to take whatever idea, action, dialogue, concept, or plot beat the author gives you and BREATHE PULSING, VIVID REALITY INTO IT.
-2. REFERENCE THE USER'S OUTCOME & PUSH DEEPLY FURTHER (NEVER MIRROR OR REPLICATE):
-   - REFERENCE & HONOR THE OUTCOME: The user's input dictates what they attempt, say, or intend to happen. Treat this outcome as having succeeded and taken immediate, tactile effect in the world. Reference their action, dialogue, or choice clearly—establishing that their intent came to pass.
-   - STRICT BAN ON COPYING, PARAPHRASING, OR MERE ECHOING: You are strictly forbidden from merely restating, rephrasing, summarizing, or mirroring back what the user typed. The user already knows what they inputted—they want the world to react and advance!
+2. ABSOLUTE BAN ON ECHOING THE USER'S PROMPT OR DUMPING BOOK SETTING — DIVE STRAIGHT INTO SCENE MOMENTUM:
+   - ZERO PROMPT COPYING OR PARAPHRASING: You are strictly forbidden from opening your response by repeating, rephrasing, summarizing, or echoing what the user typed. (For example, if the user writes "William and Gabrielle was walking on campus ground casually talking and so on", DO NOT start with "William and Gabrielle walked across the campus grounds talking...", "As William and Gabrielle walked across campus...", or "Walking casually along the grounds..."). The author already knows what they inputted!
+   - ZERO BOOK SETTING STRING DUMPS: Never dump the book's setting description verbatim into the prose (e.g., do not write "In a modern world slightly advanced..." or "The physical momentum jolts through..."). Instead, evoke atmosphere organically through concrete physical sensory details (polished concrete, morning breeze, the chime of a campus terminal).
+   - IN MEDIAS RES & PROGRESSION: Plunge directly into what happens NEXT. Have the characters already in the midst of their action and banter, showing their distinct voice tones in authentic spoken dialogue ("..."), physical reactions (*...*), and an immediate complication, sensory event, or forward hook.
    - PUSH INTO WHAT HAPPENS NEXT (NEW MOMENTUM & COMPLICATIONS):
      • Advance the scene into the immediate next seconds/minutes: don't freeze at the action.
      • How do the surrounding characters react verbally and emotionally? Other characters MUST speak in dialogue, challenge the move, reveal hidden knowledge, or take counter-actions.
@@ -1907,6 +2013,23 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
         cleanReply = rawReply.replace(manifestRegex, "").trim();
       }
 
+      // If no characters were discovered by model manifest, check if user mentioned any explicit new characters
+      if (discoveredCharacters.length === 0 && lastUserMsg) {
+        const explicitInMsg = extractExplicitCharacterNames(lastUserMsg);
+        const existingNames = new Set((book?.characters || []).map((c: any) => c?.name?.toLowerCase()));
+        for (const name of explicitInMsg) {
+          if (!existingNames.has(name.toLowerCase())) {
+            discoveredCharacters.push({
+              name,
+              role: /\b(?:college|university|school|academy|campus)\b/i.test(book?.setting || lastUserMsg) ? "Student" : "Character",
+              description: "Active in the scene.",
+              voiceTone: defaultBookTone,
+            });
+            existingNames.add(name.toLowerCase());
+          }
+        }
+      }
+
       // Guarantee no stray "the protagonist" references slip into narrative
       cleanReply = sanitizeNarrativeOutput(cleanReply, book);
 
@@ -1919,9 +2042,25 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
       const fallbackMsg = Array.isArray(req.body?.messages)
         ? req.body.messages.reverse().find((m: any) => m?.role === "user")?.content || ""
         : "";
+      const fallbackChars: Array<{ name: string; role: string; description: string; voiceTone?: string }> = [];
+      if (fallbackMsg) {
+        const explicitInMsg = extractExplicitCharacterNames(fallbackMsg);
+        const existingNames = new Set((fallbackBook?.characters || []).map((c: any) => c?.name?.toLowerCase()));
+        for (const name of explicitInMsg) {
+          if (!existingNames.has(name.toLowerCase())) {
+            fallbackChars.push({
+              name,
+              role: /\b(?:college|university|school|academy|campus)\b/i.test(fallbackBook?.setting || fallbackMsg) ? "Student" : "Character",
+              description: "Active in the scene.",
+              voiceTone: fallbackBook?.dialogueTone || "Casual & Conversational",
+            });
+            existingNames.add(name.toLowerCase());
+          }
+        }
+      }
       return res.json({
         reply: sanitizeNarrativeOutput(createFallbackNarrative(fallbackBook, fallbackMsg), fallbackBook),
-        newCharacters: [],
+        newCharacters: fallbackChars,
       });
     }
   });
