@@ -47,13 +47,13 @@ async function startServer() {
     }
   ): Promise<string> {
     const candidateModels = [
-      "gemini-3.8-flash",
-      "gemini-3.7-flash",
       "gemini-3.6-flash",
       "gemini-3.5-flash",
       "gemini-3.5-flash-lite",
+      "gemini-3.1-pro-preview",
       "gemini-3-flash-preview",
-      "gemini-flash-latest",
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
     ];
 
     let lastError: unknown = null;
@@ -318,6 +318,11 @@ async function startServer() {
     "city", "town", "village", "county", "district", "borough", "state", "province", "country", "kingdom", "empire", "republic", "realm", "capital",
     "lake", "river", "sea", "ocean", "mountain", "mount", "valley", "forest", "woods", "swamp", "marsh", "desert", "island", "isle", "bay", "cove", "gulf", "coast", "shore",
     "planet", "star", "galaxy", "nebula", "system", "orbit", "earth", "mars", "jupiter", "moon", "sun",
+    // Landforms, Regional & Campus Geography
+    "peninsula", "bataan", "luzon", "visayas", "mindanao", "manila", "archipelago", "strait", "ridge", "peak",
+    "quadrangle", "arcade", "pavilion", "rotunda", "colonnade", "grounds",
+    // Major Cities, Regions & Real-world locales
+    "london", "paris", "tokyo", "rome", "berlin", "boston", "chicago", "seattle", "kyoto", "singapore", "madrid", "osaka", "toronto", "vancouver", "sydney", "oxford", "cambridge", "harvard", "yale", "stanford",
     // Organizations & Collectives
     "department", "agency", "bureau", "federation", "corporation", "company", "guild", "order", "society", "council", "syndicate", "police", "alliance", "union", "league", "cult", "coven",
     // Structural / Common words
@@ -339,28 +344,88 @@ async function startServer() {
   // Pull explicit living person names from a prose premise while strictly excluding locations and institutions
   function extractExplicitCharacterNames(idea: string): string[] {
     const nonNameOpeners = new Set([
-      "A", "An", "The", "This", "That", "These", "Those", "It", "Its", "They", "We", "You",
-      "Chapter", "Book", "Story", "In", "On", "At", "When", "While", "Where", "Why", "How",
-      "After", "Before", "Two", "Three", "Four", "Five", "Many", "Some", "Every", "All",
-      "During", "Under", "Inside", "Outside", "Across", "Along", "Between", "From", "Into",
-      "With", "Without", "Through", "Once", "One", "There", "Here", "Then", "Now", "Shes",
-      "Good", "Very", "Most", "Same", "Only", "Strict", "Close", "School", "University"
+      "a", "an", "the", "this", "that", "these", "those", "it", "its", "they", "we", "you",
+      "chapter", "book", "story", "in", "on", "at", "when", "while", "where", "why", "how",
+      "after", "before", "two", "three", "four", "five", "many", "some", "every", "all",
+      "during", "under", "inside", "outside", "across", "along", "between", "from", "into",
+      "with", "without", "through", "once", "one", "there", "here", "then", "now", "shes",
+      "good", "very", "most", "same", "only", "strict", "close", "school", "university",
+      "demons", "magic", "holograms", "hologram", "stuff", "world", "modern", "advanced",
+      "are", "were", "currently", "which", "who", "whom", "whose", "called", "named"
     ]);
+
+    // Gather all words that belong to an institution, school, academy, or location mentioned in the premise
+    const institutionStopWords = new Set<string>([
+      "bataan", "peninsula", "state", "university", "college", "school", "academy", "institute",
+      "campus", "faculty", "hospital", "hall", "pavilion", "arcade", "quadrangle", "luzon", "manila",
+      "london", "paris", "tokyo", "boston", "chicago"
+    ]);
+
+    const institutionPattern =
+      /\b([A-Z][a-zA-Z'’\-]+(?:\s+[A-Z][a-zA-Z'’\-]+)*\s+(?:University|College|School|Academy|Institute|State\s+University|Campus|High\s+School|Hospital|Guild|Facility|Station))\b/gi;
+    for (const match of idea.matchAll(institutionPattern)) {
+      const words = match[1].toLowerCase().split(/\s+/);
+      for (const w of words) {
+        institutionStopWords.add(w.replace(/[^a-z]/g, ""));
+      }
+    }
+
+    const calledPlacePattern =
+      /(?:university|college|school|academy|place|city|town|province)\s+(?:called|named)\s+([A-Z][a-zA-Z'’\-]+(?:\s+[A-Z][a-zA-Z'’\-]+)*)/gi;
+    for (const match of idea.matchAll(calledPlacePattern)) {
+      const words = match[1].toLowerCase().split(/\s+/);
+      for (const w of words) {
+        institutionStopWords.add(w.replace(/[^a-z]/g, ""));
+      }
+    }
+
+    // Capture places introduced with spatial prepositions (e.g. "murders in New London", "set in Old York")
+    const prepositionalPlacePattern =
+      /\b(?:in|at|near|from|to|around|across|throughout)\s+([A-Z][a-zA-Z'’\-]+(?:\s+[A-Z][a-zA-Z'’\-]+)*)\b/g;
+    for (const match of idea.matchAll(prepositionalPlacePattern)) {
+      const placeCandidate = match[1].trim();
+      // Skip if preceded by person titles
+      if (!/^(?:Lord|Lady|Sir|Madam|Professor|Doctor|Captain|Detective|Commander)\b/i.test(placeCandidate)) {
+        const words = placeCandidate.toLowerCase().split(/\s+/);
+        for (const w of words) {
+          institutionStopWords.add(w.replace(/[^a-z]/g, ""));
+        }
+      }
+    }
+
+    const isBlocked = (name: string): boolean => {
+      if (!name) return true;
+      if (nonNameOpeners.has(name.toLowerCase())) return true;
+      if (isNonPersonName(name)) return true;
+      const words = name.toLowerCase().split(/\s+/);
+      for (const w of words) {
+        const cleanW = w.replace(/[^a-z]/g, "");
+        if (institutionStopWords.has(cleanW) || NON_PERSON_LOCATION_KEYWORDS.has(cleanW) || nonNameOpeners.has(cleanW)) {
+          return true;
+        }
+      }
+      return false;
+    };
 
     const candidates: string[] = [];
 
-    // 1. Explicit multi-word proper names: "Arthur Pendelton", "Gabriella Kazumi de Vara", "Julian Cross"
+    // 1. Explicit multi-word proper names: "Arthur Pendelton", "Gabriella Kazumi de Vara", "Ethan William Erolson", "Julian Cross"
     const multiWordPattern =
       /\b([A-Z][A-Za-z'’\-]+(?:\s+(?:(?:de|del|della|di|da|dos|du|la|le|van|von|der|den|bin|al)\s+)?[A-Z][A-Za-z'’\-]+){1,3})\b/g;
     for (const match of idea.matchAll(multiWordPattern)) {
-      candidates.push(match[1].trim().replace(/[.,;:!?]+$/g, ""));
+      const name = match[1].trim().replace(/[.,;:!?]+$/g, "");
+      if (!isBlocked(name)) {
+        candidates.push(name);
+      }
     }
 
     // 2. Co-occurring capitalized proper names: "William and Gabrielle", "Eleanor and Gabriella"
     const pairPattern = /\b([A-Z][A-Za-z'’\-]{2,})\s+(?:and|&)\s+([A-Z][A-Za-z'’\-]{2,})\b/g;
     for (const match of idea.matchAll(pairPattern)) {
-      candidates.push(match[1].trim().replace(/[.,;:!?]+$/g, ""));
-      candidates.push(match[2].trim().replace(/[.,;:!?]+$/g, ""));
+      const name1 = match[1].trim().replace(/[.,;:!?]+$/g, "");
+      const name2 = match[2].trim().replace(/[.,;:!?]+$/g, "");
+      if (!isBlocked(name1)) candidates.push(name1);
+      if (!isBlocked(name2)) candidates.push(name2);
     }
 
     // 3. Titled names and authority roles: "Supreme Director", "Director Kazumi", "Guild Master"
@@ -369,23 +434,27 @@ async function startServer() {
     for (const match of idea.matchAll(titlePattern)) {
       const role = match[1].split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
       const name = match[2] ? match[2].trim() : "";
-      candidates.push(name ? `${role} ${name}` : role);
+      const full = name ? `${role} ${name}` : role;
+      if (!isBlocked(full)) {
+        candidates.push(full);
+      }
     }
 
-    // 4. Standalone capitalized proper names: "Gabriella", "Eleanor"
-    const singleCapPattern = /\b([A-Z][a-z]{2,})\b/g;
-    for (const match of idea.matchAll(singleCapPattern)) {
+    // 4. Standalone names with explicit character/person context: "friend Ethan", "student Gabrielle"
+    const contextualPattern =
+      /\b(?:student|friend|bestfriend|partner|companion|protagonist|detective|investigator|hunter|mage|wizard|knight|hero|brother|sister)\s+([A-Z][a-z]{2,})\b/g;
+    for (const match of idea.matchAll(contextualPattern)) {
       const w = match[1].trim();
-      if (!nonNameOpeners.has(w) && !isNonPersonName(w)) {
+      if (!nonNameOpeners.has(w.toLowerCase()) && !isBlocked(w)) {
         candidates.push(w);
       }
     }
 
     // 5. Common story protagonist/companion names even if lowercase in user input
-    const commonNames = new Set(["william", "gabrielle", "gabriella", "eleanor", "julian", "arthur", "silas", "kazumi", "lucas", "liam"]);
+    const commonNames = new Set(["ethan", "william", "gabrielle", "gabriella", "eleanor", "julian", "arthur", "silas", "kazumi", "lucas", "liam", "evelyn", "elena"]);
     for (const word of idea.split(/\s+/)) {
       const clean = word.toLowerCase().replace(/[^a-z]/g, "");
-      if (commonNames.has(clean)) {
+      if (commonNames.has(clean) && !isBlocked(clean)) {
         candidates.push(clean.charAt(0).toUpperCase() + clean.slice(1));
       }
     }
@@ -394,14 +463,15 @@ async function startServer() {
     for (const candidate of candidates) {
       if (!candidate) continue;
       const firstWord = candidate.split(/\s+/)[0];
-      if (nonNameOpeners.has(firstWord) && !/Supreme|Director|Commander|Captain/i.test(firstWord)) continue;
-      if (isNonPersonName(candidate)) continue;
+      if (nonNameOpeners.has(firstWord.toLowerCase()) && !/Supreme|Director|Commander|Captain/i.test(firstWord)) continue;
+      if (nonNameOpeners.has(candidate.toLowerCase())) continue;
+      if (isBlocked(candidate)) continue;
       if (!filteredNames.some((name) => name.toLowerCase() === candidate.toLowerCase())) {
         filteredNames.push(candidate);
       }
     }
 
-    // Remove single-word roles if the full titled role exists (e.g., remove "Supreme" if "Supreme Director" exists)
+    // Remove single-word roles if the full titled role or full multi-word name exists
     return filteredNames.filter(name => {
       const isSub = filteredNames.some(other => other !== name && other.toLowerCase().includes(name.toLowerCase()));
       return !isSub;
@@ -414,17 +484,24 @@ async function startServer() {
 
     return names.map((name, index) => {
       const otherNames = names.filter((_, otherIndex) => otherIndex !== index);
-      const relationship = areBestFriends && otherNames.length > 0
-        ? `${otherNames.join(" and ")}'s best friend${isCollegeStory ? " and fellow college student" : ""}`
-        : isCollegeStory
-          ? "A college student central to the story"
-          : "A central character named in the premise";
+      const otherName = otherNames.length > 0 ? otherNames[0] : "their companion";
+
+      let description = "";
+      if (index === 0) {
+        description = areBestFriends
+          ? `${otherName}'s lifelong childhood best friend, navigating ${isCollegeStory ? "university life" : "the unfolding world"} with calm resolve as strange anomalies emerge.`
+          : `${name} is a central figure navigating the events and mysteries of this story.`;
+      } else {
+        description = areBestFriends
+          ? `${otherName}'s sharp-witted childhood best friend, observant and quick with dry banter, determined to keep ${otherName} grounded.`
+          : `A close ally and steadfast counterpart to ${otherName}, sharing the weight of their journey.`;
+      }
 
       return {
         name,
         role: isCollegeStory ? "College Student" : "Central Character",
-        description: `${relationship}, exactly as established in the original premise.`,
-        voiceTone: index === 0 ? "Casual & Conversational" : (index === 1 ? "Sarcastic & Witty" : "Casual & Conversational"),
+        description,
+        voiceTone: index === 0 ? "Casual & Conversational" : "Sarcastic & Witty",
       };
     });
   }
@@ -432,54 +509,106 @@ async function startServer() {
   // Graceful fallback synthesizer when Gemini is unavailable
   function createFallbackBookFromIdea(idea: string) {
     const cleanIdea = idea.trim().replace(/^["']|["']$/g, "");
-    const words = cleanIdea.split(/\s+/).filter(Boolean);
-    const titleWords = words.filter(w => !/^(?:in|on|at|a|an|the|of|for|with|by|about)$/i.test(w));
-    const titleSnippet = (titleWords.length > 0 ? titleWords : words)
-      .slice(0, 4)
-      .join(" ")
-      .replace(/[^\w\s]/g, "");
-    const formattedTitle =
-      titleSnippet.length > 2
-        ? titleSnippet.replace(/\b\w/g, (c) => c.toUpperCase())
-        : "The Unwritten Folio";
+    const lower = cleanIdea.toLowerCase();
+
+    const isCollege = /\b(?:college|university|campus|academy|school)\b/i.test(lower);
+    const isTech = /\b(?:hologram|holograms|advanced|modern|cyber|digital|ai|tech)\b/i.test(lower);
+    const isSupernatural = /\b(?:demon|demons|devil|magic|magical|occult|sorcer|witch|spell)\b/i.test(lower);
+    const isMystery = /\b(?:detective|mystery|crime|investigat|murder|noir)\b/i.test(lower);
+    const isFantasy = !isTech && /\b(?:kingdom|realm|sword|castle|dragon|empire)\b/i.test(lower);
+
+    // Extract institution or location name if present
+    const locationMatch = cleanIdea.match(
+      /\b([A-Z][a-zA-Z'’\-]+(?:\s+[A-Z][a-zA-Z'’\-]+)*\s+(?:University|College|School|Academy|Institute|Campus))\b/
+    );
+    const placeName = locationMatch ? locationMatch[1].trim() : (isCollege ? "the university campus" : "the city");
 
     const explicitNames = extractExplicitCharacterNames(cleanIdea);
     const characters = createPremiseCharacters(cleanIdea, explicitNames);
-    const displayNames = explicitNames.length > 0
-      ? explicitNames.join(explicitNames.length === 2 ? " and " : ", ")
-      : "the lives at its center";
 
-    let cleanSetting = cleanIdea;
-    if (/^in\s+a\b/i.test(cleanSetting)) {
-      cleanSetting = cleanSetting.replace(/^in\s+a\b/i, "A");
+    // Synthesize an evocative, captivating title instead of dumping premise words
+    let title = "The Unwritten Folio";
+    if (isTech && isSupernatural) {
+      title = isCollege ? "The Digital Arcana" : "Veil of the Modern Arcana";
+    } else if (isSupernatural) {
+      title = isCollege ? "Demons of the Upper Quad" : "The Arcane Chronicles";
+    } else if (isTech) {
+      title = isCollege ? "The Neon Academy" : "Echoes of the High Orbit";
+    } else if (isMystery) {
+      title = "The Silent Dossier";
+    } else if (isFantasy) {
+      title = "The Obsidian Crown";
+    } else if (characters.length >= 2) {
+      const last1 = characters[0].name.split(/\s+/).pop();
+      const last2 = characters[1].name.split(/\s+/).pop();
+      title = `The Chronicles of ${last1} & ${last2}`;
     }
-    cleanSetting = cleanSetting.replace(/\badvance\b/i, "advanced");
-    cleanSetting = cleanSetting.charAt(0).toUpperCase() + cleanSetting.slice(1);
 
-    const inferredTone = /poetic|verse|lyrical|ballad/i.test(cleanIdea)
-      ? "Poetic & Lyrical"
-      : /formal|court|palace|royal|empire|victorian/i.test(cleanIdea)
-        ? "Formal & Aristocratic"
-        : /gritty|noir|crime|detective|street/i.test(cleanIdea)
-          ? "Gritty & Blunt"
-          : /academic|professor|research|library|scholar/i.test(cleanIdea)
-            ? "Scholarly & Analytical"
-            : "Casual & Conversational";
+    const subtitle = isTech && isSupernatural
+      ? (isCollege ? "A Collegiate Urban Fantasy" : "An Urban Supernatural Thriller")
+      : isCollege
+        ? "A Campus Mystery & Chronicle"
+        : (isTech ? "A Cybernetic Speculative Story" : "A Manuscript Born of an Instant Idea");
 
-    const cleanSynopsis = cleanIdea.length > 0
-      ? cleanIdea.charAt(0).toUpperCase() + cleanIdea.slice(1)
-      : "An unfolding story driven by vivid interactions.";
+    // Synthesize world setting with visceral sensory atmosphere rather than prompt copying
+    const setting = isTech && isSupernatural
+      ? `A technologically advanced modern society where holographic interfaces, floating displays, and ambient digital networks define everyday life. Beneath this orderly academic exterior at ${placeName}, ancient demons and volatile magic stir in the shadows, threatening the fragile peace between the student body and the supernatural realm.`
+      : isCollege
+        ? `The sprawling, storied collegiate grounds of ${placeName}, where lecture halls, courtyard promenades, and quiet archives frame the lives of students navigating emerging rivalries and untold mysteries.`
+        : isTech
+          ? `A near-future metropolitan civilization where digital telemetry, neon-lit corridors, and cybernetic infrastructure shape every interaction.`
+          : `An immersive, character-driven world centered around ${placeName}, charged with unspoken tension and imminent change.`;
+
+    const char1 = characters[0]?.name || "Julian Cross";
+    const char2 = characters[1]?.name || "Evelyn Ward";
+
+    // Synthesize a proper narrative synopsis written strictly in the third person
+    const synopsis = isCollege && isSupernatural
+      ? `At ${placeName}, childhood best friends ${char1} and ${char2} navigate the demands of university life in a modern world governed by holographic technology. But when demonic signatures and forgotten magic begin manifesting across the campus grounds, the two friends must rely on their lifelong bond to confront the supernatural shadows threatening to engulf their world.`
+      : isCollege
+        ? `At ${placeName}, ${char1} and ${char2} navigate campus life, academic ambitions, and rising tensions that will test the strength of their bond as unexpected events reshape their future.`
+        : `In a shifting world, ${char1} and ${char2} find their lives irreversibly altered when unexpected forces challenge everything they thought they understood.`;
+
+    const inferredTone = isTech && isSupernatural
+      ? "Casual & Conversational"
+      : /sarcastic|witty/i.test(lower)
+        ? "Sarcastic & Witty"
+        : "Casual & Conversational";
+
+    // Dynamic, atmospheric prologue with character action and spoken dialogue
+    const prologue = `*A crisp morning breeze swept across the wide stone courtyard of ${placeName}, sending blue-tinted holographic lecture schedules shimmering against the glass facades of the campus complex.*
+
+${char1} walked with an unhurried stride, hands loosely buried in jacket pockets as streams of students navigated the morning rush. Beside him, ${char2} kept pace, casually flipping through a floating digital reader before casting a sharp, knowing look toward the shaded colonnade.
+
+"You're awfully quiet today," ${char2} remarked with a dry smirk, bumping a shoulder lightly against ${char1}. "Usually by this time you've already found three different flaws in the advanced seminar syllabus."
+
+"The syllabus is fine," ${char1} answered under his breath, dark eyes calmly scanning the courtyard where a strange, cold static hummed beneath the pavement. "It's the fact that the campus sensors just logged an unregistered demonic signature near the west wing that has me paying attention."
+
+*Between them hung the quiet, unbreakable certainty of childhood friends who knew each other's instincts by heart—and the unspoken realization that the peaceful morning was already slipping away.*`;
 
     return {
-      title: `The Chronicles of ${formattedTitle}`,
-      subtitle: "A Manuscript Born of an Instant Idea",
-      setting: cleanSetting,
+      title,
+      subtitle,
+      setting,
       dialogueTone: inferredTone,
-      synopsis: cleanSynopsis,
-      prologue: `*Morning settles across ${cleanSetting.toLowerCase().startsWith("a ") ? cleanSetting.toLowerCase() : "the horizon"}, its quiet rhythm establishing the stage for what is to come.*\n\n*${displayNames} move through this world with their history already woven between them—unaware that the choices made before dusk will alter the trajectory of their lives forever.*\n\n*The first page opens in the quiet before the turning tide.*`,
+      synopsis,
+      prologue,
       coverColor: "#7a282f",
-      coverIcon: "BookOpen",
-      characters,
+      coverIcon: isSupernatural ? "Sparkles" : (isTech ? "Compass" : "BookOpen"),
+      characters: characters.length > 0 ? characters : [
+        {
+          name: "Ethan William Erolson",
+          role: "College Student",
+          description: "A composed student navigating university life and emerging anomalies with calm vigilance.",
+          voiceTone: "Casual & Conversational"
+        },
+        {
+          name: "Gabrielle Sebastian de Vara",
+          role: "College Student",
+          description: "A sharp-witted companion, perceptive and quick with dry retorts.",
+          voiceTone: "Sarcastic & Witty"
+        }
+      ],
     };
   }
 
