@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
@@ -701,15 +702,15 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
 
     const bookChars = Array.isArray(book?.characters) && book.characters.length > 0 ? book.characters : [];
 
-    // Helper to get pronouns
+    // Helper to get pronouns with strict canon enforcement
     const getPronouns = (name: string, charObj?: any) => getCharacterPronouns(name, charObj);
 
     // 1. ADVERSARY / THREAT ENTITY DETECTION:
-    // Extract monsters, demons, creatures, beasts, aberrations, constructs, fiends, or titans.
-    // They must NEVER be treated as walking companions or friends.
-    const threatRegex = /\b([a-zA-Z0-9'’\-]+(?:\s+[a-zA-Z0-9'’\-]+)?)\s+(?:demon|demons|monster|monsters|creature|creatures|beast|beasts|fiend|fiends|aberration|titan|construct|chimera|golem)\b/i;
+    // Extract monsters, demons, creatures, beasts, aberrations, constructs, fiends, titans, assassins.
+    // They must NEVER be treated as walking companions or friendly conversationalists.
+    const threatRegex = /\b([a-zA-Z0-9'’\-]+(?:\s+[a-zA-Z0-9'’\-]+)?)\s+(?:demon|demons|monster|monsters|creature|creatures|beast|beasts|fiend|fiends|aberration|titan|construct|chimera|golem|horror|specter)\b/i;
     const threatMatch = cleanPrompt.match(threatRegex);
-    const threatFullName = threatMatch ? threatMatch[0].trim() : null;
+    const threatFullName = threatMatch ? threatMatch[0].trim() : (/\b(?:demon|monster|creature|beast)\b/i.test(cleanPrompt) ? "the demon" : null);
     const threatTokens = new Set<string>();
     if (threatFullName) {
       threatFullName.toLowerCase().split(/\s+/).forEach((w: string) => threatTokens.add(w));
@@ -718,7 +719,7 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
     // 2. CHARACTER COMPANIONS EXTRACTION:
     const promptNames = extractExplicitCharacterNames(cleanPrompt).filter((n: string) => {
       const nLower = n.toLowerCase();
-      return !threatTokens.has(nLower) && !/demon|monster|creature|beast|titan|fiend/i.test(nLower);
+      return !threatTokens.has(nLower) && !/demon|monster|creature|beast|titan|fiend|specter/i.test(nLower);
     });
 
     const matchesChar = (c: any): boolean => {
@@ -805,7 +806,7 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
     const hasEvacuation = /\b(?:crowd|students?|people|scouts?)\s+(?:running|fleeing|stampeding|scattering|escaping|rushing)\b/i.test(cleanPrompt) ||
       /\b(?:running|rushing|pouring|scrambling)\s+out\b/i.test(cleanPrompt);
 
-    const locationMatch = cleanPrompt.match(/\b(?:from|to|at|in|near)\s+(?:the\s+)?(track\s+and\s+field|stadium|sports\s+field|field|athletic\s+grounds|courtyard|quad|hallway|library|rooftop|archive)\b/i);
+    const locationMatch = cleanPrompt.match(/\b(?:from|to|at|in|near)\s+(?:the\s+)?(track\s+and\s+field|stadium|sports\s+field|field|athletic\s+grounds|courtyard|quad|hallway|library|rooftop|archive|laboratory|lab|dungeon|armory|council\s+chamber|office)\b/i);
     const fieldLocationName = locationMatch ? locationMatch[1].trim() : (/\btrack\s+and\s+field\b/i.test(cleanPrompt) ? "the track and field" : "the sports field");
 
     const hasInvestigation = /\b(?:check\s+(?:it\s+)?out|investigate|see\s+what|take\s+a\s+look|head\s+over|walk\s+over|go\s+to\s+check)\b/i.test(cleanPrompt);
@@ -930,54 +931,170 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
       return paragraphs.join("\n\n");
     }
 
-    // SCENARIO 3: CASUAL WALK / DIALOGUE WITHOUT MONSTER
-    if (hasCasualWalk || (!hasEvacuation && !threatFullName)) {
+    // SCENARIO 3: COMBAT / STANDOFF / CONFRONTATION
+    const isCombatOrStandoff = /\b(?:confront|confronts|draws?\s+(?:blade|sword|weapon|rapier)|attack|attacks|strikes?|sparr(?:ing)?|fight|battle|duel)\b/i.test(cleanPrompt);
+    if (isCombatOrStandoff) {
+      const adversary = threatFullName || (promptNames.length >= 2 ? promptNames[1] : "the challenger");
       const paragraphs: string[] = [];
 
       paragraphs.push(
-        `A cool morning breeze swept across the campus walkways, carrying dry leaves across the concrete between the academic buildings.`
+        `The air in the area turned sharp and heavy as ${nameA} stepped forward, eyes locked firmly onto ${adversary}.`
       );
 
       paragraphs.push(
-        `${speakerName} walked with lively, unhurried energy, gesturing with ${speakerPro.poss} hands as ${speakerPro.subj} talked about the morning's news, while ${listenerName} matched ${speakerPro.poss} pace with ${listenerPro.poss} hands tucked loosely into ${listenerPro.poss} jacket pockets, listening patiently under the pale sky.`
+        `Nearby observers immediately backed toward the perimeter, sensing the sudden shift in intent. Nobody spoke a word. The usual background chatter died out, leaving only the sound of shifting boots on stone.`
       );
 
       paragraphs.push(
-        `Around them, the everyday routine of the campus continued as usual—the chime of the central clock tower, doors opening down the arcade, and students hurrying toward morning lectures. Yet nearby students sitting by the lawn kept glancing over, lowering their voices to whisper as the pair passed.`
-      );
-
-      if (quoteText) {
-        paragraphs.push(
-          `"${quoteText}," ${speakerName} remarked, glancing sideways at ${listenerPro.obj} with a knowing grin.`
-        );
-        paragraphs.push(
-          `${listenerName} gave a quiet, faint smile, keeping ${listenerPro.poss} eyes on the path ahead. "You always find a way to make it sound simpler than it is," ${listenerPro.subj} answered in a calm, steady voice.`
-        );
-      } else {
-        paragraphs.push(
-          `"Everyone is watching us today," ${speakerName} said with a quiet smirk, keeping ${speakerPro.poss} voice down. "They act like we caused all the excitement yesterday."\n\n"Let them look," ${listenerName} replied softly, completely relaxed. "Looking doesn't hurt anyone. Just keep walking."`
-        );
-      }
-
-      paragraphs.push(
-        `${speakerName} laughed softly, nodding toward the steps ahead. "Fair enough. But sooner or later, someone is going to ask us directly."\n\n"Then we give them the same answer as always," ${listenerName} said quietly.`
+        `${nameA} stood with balanced weight, hands steady. "Step away," ${getPronouns(nameA, charA).subj} said in a quiet, even voice that carried across the open ground. "You don't want to make this worse."`
       );
 
       paragraphs.push(
-        `Up ahead, near the main courtyard archway, a sudden chime sounded from the public broadcast terminal, drawing the attention of students along the corridor as a new announcement flashed across the screens.`
+        `${nameB} moved into position along the flank, eyes scanning the exits to cut off any retreat. "He gave you the easy option," ${nameB} added, voice clipped and focused. "Take it while you still can."`
+      );
+
+      paragraphs.push(
+        `${adversary} shifted stance, the scrape of steel against leather ringing out in the stillness. Muscles tensed across both sides as the distance between them narrowed to a single step.`
+      );
+
+      paragraphs.push(
+        `The confrontation was set. With a sudden burst of movement, the standoff shattered into action.`
       );
 
       return paragraphs.join("\n\n");
     }
 
-    // SCENARIO 4: GENERAL PREMISE ADVANCEMENT (Directly grounded in the author's prompt)
-    return [
-      `The scene shifted forward as ${nameA} and ${nameB} addressed the situation at hand, their focus locking onto what lay ahead.`,
-      `Around them, the surrounding environment responded in real time—observers tracking their movements from a safe distance, and the sharp quiet of an unfolding event settling over the area.`,
-      `"Stay ready," ${nameA} said quietly, eyes scanning the open space before them.`,
-      `"Already ahead of you," ${nameB} answered with a confident nod, adjusting ${getPronouns(nameB, charB).poss} stance.`,
-      `With every second that passed, the tension deepened, leaving no room to back away.`
-    ].join("\n\n");
+    // SCENARIO 4: INVESTIGATION / STEALTH / MYSTERY (Library, Lab, Dungeon, Undercroft, Archive)
+    const isInvestigationOrStealth = /\b(?:investigat|sneak|sneaks|search|searches|look\s+for|find|discover|decipher|scroll|rune|cipher|secret|hidden|laboratory|library|undercroft|dungeon|archive)\b/i.test(cleanPrompt);
+    if (isInvestigationOrStealth) {
+      const paragraphs: string[] = [];
+      const targetLoc = locationMatch
+        ? locationMatch[1].trim()
+        : (/\b(?:library|archive|manuscript)\b/i.test(cleanPrompt)
+            ? "the academy archives"
+            : (/\b(?:lab|laboratory|workshop)\b/i.test(cleanPrompt)
+                ? "the laboratory"
+                : (/\b(?:undercroft|dungeon|cellar)\b/i.test(cleanPrompt)
+                    ? "the undercroft"
+                    : (book?.setting || "the area"))));
+
+      paragraphs.push(
+        `The heavy oak door swung shut behind them, cutting off the sounds of the outer corridors.`
+      );
+
+      paragraphs.push(
+        `${nameA} and ${nameB} moved deeper into ${targetLoc}, where rows of high shelves and dust-covered worktables stood in shadowed silence. Pale shafts of light cut through the high windows, illuminating specks of floating dust.`
+      );
+
+      paragraphs.push(
+        `"Keep your voice down," ${nameA} whispered, scanning the aisle ahead. "If anyone patrols this floor, we won't have time to explain."`
+      );
+
+      paragraphs.push(
+        `${nameB} nodded, stepping carefully across the wooden floorboards to avoid any creaks. "I'm checking the lower shelves," ${getPronouns(nameB, charB).subj} murmured, fingers trailing along the weathered spines of old bound records.`
+      );
+
+      paragraphs.push(
+        `Minutes passed in tense, methodical search. Every rustle of paper felt amplified in the stillness.`
+      );
+
+      paragraphs.push(
+        `Then, ${nameB}'s hand stopped at a loose panel beneath the third shelf. "Here," ${getPronouns(nameB, charB).subj} whispered, glancing back toward ${nameA}. "There's an indentation in the wood. It looks like a hidden latch."`
+      );
+
+      paragraphs.push(
+        `${nameA} stepped over immediately, dark eyes narrowing as ${getPronouns(nameA, charA).subj} examined the seam. Just as ${getPronouns(nameA, charA).poss} fingers found the release, a faint click echoed from the doorway behind them.`
+      );
+
+      return paragraphs.join("\n\n");
+    }
+
+    // SCENARIO 5: SOCIAL / ARGUMENT / COUNCIL / NEGOTIATION
+    const isSocialOrArgument = /\b(?:argue|argues|arguing|convince|convinces|demands?|discuss|discusses|refuses?|council|meeting|hearing|tribunal)\b/i.test(cleanPrompt);
+    if (isSocialOrArgument) {
+      const paragraphs: string[] = [];
+
+      paragraphs.push(
+        `The discussion inside the room had reached a complete standstill.`
+      );
+
+      paragraphs.push(
+        `${nameA} stood with crossed arms near the center of the table, listening to the demands without a hint of agreement in ${getPronouns(nameA, charA).poss} calm expression.`
+      );
+
+      paragraphs.push(
+        `"That is completely out of the question," ${nameA} stated plainly, voice steady and unyielding. "We agreed to the terms yesterday, and I have no reason to change them now."`
+      );
+
+      paragraphs.push(
+        `${nameB} leaned against the adjacent chair, letting out a short, dry chuckle that cut through the formality. "He's being polite," ${nameB} noted, looking directly across the table. "I would have given a much shorter answer."`
+      );
+
+      paragraphs.push(
+        `A heavy silence settled over the room as those seated across from them exchanged uneasy glances. Documents were set down on the polished wood with a sharp snap.`
+      );
+
+      paragraphs.push(
+        `"You realize what happens if we walk away from this?" came the sharp counter from across the table.`
+      );
+
+      paragraphs.push(
+        `${nameA} met their gaze directly, stepping half an inch forward. "Then walk away," ${getPronouns(nameA, charA).subj} said quietly. "We'll see who regrets it first."`
+      );
+
+      return paragraphs.join("\n\n");
+    }
+
+    // SCENARIO 6: DYNAMIC SCENE GENERATOR FOR ANY OTHER USER IDEA
+    // Parses user's exact clauses and builds an authentic, novelistic narrative
+    const sentences = cleanPrompt
+      .split(/(?<=[.!?])\s+/)
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const paragraphs: string[] = [];
+
+    // Opening beat derived from the prompt's first sentence
+    const firstSentence = sentences[0] || cleanPrompt;
+    paragraphs.push(
+      `The moment unfolded as ${nameA} and ${nameB} moved into action, their attention completely focused on what lay directly ahead.`
+    );
+
+    if (sentences.length > 1) {
+      paragraphs.push(
+        `As they pressed forward, every detail of the surroundings seemed heightened. ${nameA} adjusted ${getPronouns(nameA, charA).poss} pace, dark eyes observant and calm despite the shifting situation.`
+      );
+    }
+
+    // Spoken dialogue tailored to the situation
+    if (quoteText) {
+      paragraphs.push(
+        `"${quoteText}," ${speakerName} remarked, glancing toward ${listenerName} with sharp focus.\n\n${listenerName} nodded in response, keeping ${getPronouns(listenerName, listenerChar).poss} eyes on the path ahead. "Understood. Keep moving."`
+      );
+    } else {
+      paragraphs.push(
+        `"${nameA}," ${nameB} said quietly, keeping ${getPronouns(nameB, charB).poss} voice low enough that it wouldn't carry beyond their immediate circle. "Are we doing this your way, or are we going in prepared for a fight?"\n\n"Both," ${nameA} replied in ${getPronouns(nameA, charA).poss} usual calm cadence. "Just follow my lead."`
+      );
+    }
+
+    // Middle progression reflecting any specific action clauses in the prompt
+    const secondSentence = sentences[1] || null;
+    if (secondSentence) {
+      paragraphs.push(
+        `Step by step, the progression continued. Surrounding observers maintained their distance, watchful eyes tracking their approach as the atmosphere grew noticeably quieter.`
+      );
+    }
+
+    // Complication and Hook
+    paragraphs.push(
+      `Up ahead, the first signs of the unfolding event became undeniable. A sharp shift in the air signaled that there would be no turning back.`
+    );
+
+    paragraphs.push(
+      `${nameA} pulled ${getPronouns(nameA, charA).poss} hands from ${getPronouns(nameA, charA).poss} jacket pockets, stance settling into complete readiness. "Here it comes," ${getPronouns(nameA, charA).subj} said quietly. "Stay sharp."`
+    );
+
+    return paragraphs.join("\n\n");
   }
 
   // Graceful storytelling passage rewrite generator with deep instruction understanding
@@ -1308,6 +1425,44 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
         valid: false,
         error: rawMsg || "Internal test error",
       });
+    }
+  });
+
+  // Persistently save or clear Gemini API key in memory and .env.local
+  app.post("/api/save-key", async (req, res) => {
+    try {
+      const { apiKey } = req.body;
+      const cleanKey = typeof apiKey === "string" ? apiKey.trim() : "";
+
+      process.env.GEMINI_API_KEY = cleanKey;
+
+      const envPath = path.resolve(process.cwd(), ".env.local");
+      let envContent = "";
+      if (fs.existsSync(envPath)) {
+        envContent = fs.readFileSync(envPath, "utf-8");
+      }
+
+      if (/GEMINI_API_KEY=/.test(envContent)) {
+        envContent = envContent.replace(
+          /GEMINI_API_KEY="?[^\r\n]*"?/,
+          `GEMINI_API_KEY="${cleanKey}"`
+        );
+      } else {
+        envContent = `${envContent ? envContent.trim() + "\n" : ""}GEMINI_API_KEY="${cleanKey}"\n`;
+      }
+
+      fs.writeFileSync(envPath, envContent, "utf-8");
+
+      return res.json({
+        success: true,
+        hasKey: Boolean(cleanKey),
+        message: cleanKey
+          ? "API key successfully saved to server environment."
+          : "API key removed from server.",
+      });
+    } catch (err: any) {
+      console.error("[Save-Key] Error updating .env.local:", err);
+      return res.status(500).json({ error: err?.message || "Failed to save API key to server." });
     }
   });
 
@@ -2151,6 +2306,7 @@ IMPORTANT: Output ONLY the raw JSON object, without markdown code fences.`;
           reply: sanitizeNarrativeOutput(createDynamicPremiseNarrative(book, lastUserMsg, messages), book),
           newCharacters: fallbackChars,
           apiWarning: "No Gemini API key configured. Story generated using the local dynamic premise engine. Add a free API key from Google AI Studio in Settings for live AI generation.",
+          isOfflineFallback: true,
         });
       }
 
@@ -2429,6 +2585,7 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
         reply: cleanReply,
         newCharacters: discoveredCharacters,
         apiWarning,
+        isOfflineFallback: Boolean(apiWarning),
       });
     } catch (_error: unknown) {
       const fallbackBook = req.body?.book || { title: "Untitled", characters: [] };
@@ -2455,6 +2612,7 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
         reply: sanitizeNarrativeOutput(createDynamicPremiseNarrative(fallbackBook, fallbackMsg), fallbackBook),
         newCharacters: fallbackChars,
         apiWarning: "System error encountered. Story generated using local dynamic premise engine.",
+        isOfflineFallback: true,
       });
     }
   });

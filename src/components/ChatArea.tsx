@@ -320,6 +320,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         role: 'assistant',
         content: replyContent,
         timestamp: Date.now(),
+        isOfflineFallback: Boolean(data.isOfflineFallback || data.apiWarning),
       };
 
       // Check for dynamically discovered new characters
@@ -439,6 +440,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         role: 'assistant',
         content: replyContent,
         timestamp: Date.now(),
+        isOfflineFallback: Boolean(data.isOfflineFallback || data.apiWarning),
       };
 
       const chapterWithReply: Chapter = {
@@ -1199,6 +1201,19 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                           </span>
                         )}
                       </span>
+                      {isAssistant && msg.isOfflineFallback && (
+                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#fff8e6] text-[#7c5e10] text-[10px] font-sans border border-[#f3d99f]">
+                          <AlertCircle className="w-3 h-3 text-[#d97706] shrink-0" />
+                          <span>Local Engine (Gemini Credits Depleted)</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowApiKeyModal(true)}
+                            className="text-[#d97706] hover:text-[#b45309] font-semibold underline cursor-pointer ml-0.5"
+                          >
+                            Enter Free Key
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Message Content or Edit Input */}

@@ -25,6 +25,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   speaker?: string; // Optional character or narrator attribution
+  isOfflineFallback?: boolean; // True if response was produced by local dynamic premise engine
 }
 
 export interface Chapter {

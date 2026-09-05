@@ -22,6 +22,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   }>({ status: 'idle' });
   const [hasSavedKey, setHasSavedKey] = useState(false);
 
+  const [isSaving, setIsSaving] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
       const stored = localStorage.getItem('folio_gemini_api_key') || '';
@@ -63,15 +65,14 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
         } else {
           setTestResult({
             status: 'success',
-            message: `Successfully connected to Google Gemini (${response.model || 'gemini-3.5-flash-lite'})! Live AI is active.`,
+            message: `Successfully connected to Google Gemini (${response.model || 'gemini-3.7-flash'})! Live AI is active.`,
           });
         }
       } else if (response.isDepleted) {
         setTestResult({
           status: 'depleted',
           message:
-            response.error ||
-            'Prepayment credits depleted ($0 balance). Please get a free API key from Google AI Studio without prepay billing.',
+            'This project has prepayment billing enabled with a depleted $0 balance. On Google AI Studio (aistudio.google.com), create an API key in a standard project WITHOUT prepayment billing enabled to use the completely free tier (1,500 requests/day, no card needed).',
         });
       } else {
         setTestResult({
@@ -89,8 +90,19 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const trimmed = apiKey.trim();
+    setIsSaving(true);
+
+    try {
+      await safeFetchJson('/api/save-key', {
+        method: 'POST',
+        body: JSON.stringify({ apiKey: trimmed }),
+      });
+    } catch (_err) {
+      // If server save fails, still update localStorage for frontend headers
+    }
+
     if (trimmed) {
       localStorage.setItem('folio_gemini_api_key', trimmed);
       setHasSavedKey(true);
@@ -100,14 +112,25 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
       setHasSavedKey(false);
       if (onKeyUpdated) onKeyUpdated(false);
     }
+
+    setIsSaving(false);
     onClose();
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
+    setIsSaving(true);
+    try {
+      await safeFetchJson('/api/save-key', {
+        method: 'POST',
+        body: JSON.stringify({ apiKey: '' }),
+      });
+    } catch (_err) {}
+
     localStorage.removeItem('folio_gemini_api_key');
     setApiKey('');
     setHasSavedKey(false);
     setTestResult({ status: 'idle' });
+    setIsSaving(false);
     if (onKeyUpdated) onKeyUpdated(false);
   };
 
@@ -267,10 +290,20 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             <button
               type="button"
               onClick={handleSave}
-              className="px-4 py-1.5 bg-[#7a282f] hover:bg-[#632026] text-[#fbf9f5] rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors shadow-xs"
+              disabled={isSaving || isTesting}
+              className="px-4 py-1.5 bg-[#7a282f] hover:bg-[#632026] text-[#fbf9f5] rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors shadow-xs disabled:opacity-50"
             >
-              <Check className="w-3.5 h-3.5" />
-              <span>Save & Use</span>
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#fbf9f5]" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Save & Use</span>
+                </>
+              )}
             </button>
           </div>
         </div>
