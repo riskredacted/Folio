@@ -78,7 +78,7 @@ export const BookModal: React.FC<BookModalProps> = ({
   const [prologue, setPrologue] = useState('');
   const [coverColor, setCoverColor] = useState(COVER_COLORS[0].hex);
   const [coverIcon, setCoverIcon] = useState('BookOpen');
-  const [dialogueTone, setDialogueTone] = useState('Victorian Gothic & Classic Literary');
+  const [dialogueTone, setDialogueTone] = useState('Simple, Natural & Conversational');
   const [characters, setCharacters] = useState<
     Array<{ name: string; role: string; description: string; voiceTone?: string }>
   >([]);
@@ -101,7 +101,7 @@ export const BookModal: React.FC<BookModalProps> = ({
       setSubtitle(bookToEdit.subtitle || '');
       setSynopsis(bookToEdit.synopsis || '');
       setSetting(bookToEdit.setting || '');
-      setDialogueTone(bookToEdit.dialogueTone || 'Victorian Gothic & Classic Literary');
+      setDialogueTone(bookToEdit.dialogueTone || 'Simple, Natural & Conversational');
       setPrologue(bookToEdit.prologue || '');
       setCoverColor(bookToEdit.coverColor || COVER_COLORS[0].hex);
       setCoverIcon(bookToEdit.coverIcon || 'BookOpen');
@@ -124,7 +124,7 @@ export const BookModal: React.FC<BookModalProps> = ({
       setSubtitle('');
       setSynopsis('');
       setSetting('');
-      setDialogueTone('Victorian Gothic & Classic Literary');
+      setDialogueTone('Simple, Natural & Conversational');
       setLoreNotes('');
       setPrologue('');
       setCoverColor(COVER_COLORS[0].hex);
@@ -623,7 +623,7 @@ export const BookModal: React.FC<BookModalProps> = ({
                   type="text"
                   value={dialogueTone}
                   onChange={(e) => setDialogueTone(e.target.value)}
-                  placeholder="e.g. Victorian Gothic & Formal, or Casual & Natural"
+                  placeholder="e.g. Simple, Natural & Conversational, or Casual & Direct"
                   className="w-full px-3 py-2 bg-[#ffffff] border border-[#d8cfc4] rounded-md text-sm text-[#24211e] placeholder-[#a69c8f] focus:outline-none focus:ring-1 focus:ring-[#7a282f] focus:border-[#7a282f]"
                 />
               </div>

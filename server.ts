@@ -304,7 +304,24 @@ async function startServer() {
       .replace(/\bbetween\s+you\b/gi, "between them")
       // Scrub canned mechanical echo artifacts
       .replace(/^\s*\*?[^\n*]*The physical momentum jolts through [^\n*]*\*\s*\n*/gi, "")
-      .replace(/^\s*\*?[^\n*]*The words hang in the (?:cold )?air of [^\n*]*\*\s*\n*/gi, "");
+      .replace(/^\s*\*?[^\n*]*The words hang in the (?:cold )?air of [^\n*]*\*\s*\n*/gi, "")
+      // Convert overly fancy / purple vocabulary to simple, clear everyday English
+      .replace(/\bbalustrade\b/gi, "railing")
+      .replace(/\bquadrangle\b/gi, "courtyard")
+      .replace(/\bspoken rejoinder\b/gi, "spoken reply")
+      .replace(/\brejoinder\b/gi, "reply")
+      .replace(/\bbrooked absolutely zero argument\b/gi, "left no room for argument")
+      .replace(/\bbrooked zero argument\b/gi, "left no room for argument")
+      .replace(/\bmeasured composure\b/gi, "calm voice")
+      .replace(/\bhastened\b/gi, "hurried")
+      .replace(/\bcountenance\b/gi, "face")
+      .replace(/\btaciturn\b/gi, "quiet")
+      .replace(/\bscrutinized?\b/gi, "watched")
+      .replace(/\bscrutiny\b/gi, "stares")
+      .replace(/\bperused?\b/gi, "read")
+      .replace(/\blabyrinthine\b/gi, "winding")
+      .replace(/\bbeneath\b/gi, "under")
+      .replace(/\bwherewithal\b/gi, "means");
 
     return sanitized;
   }
@@ -635,22 +652,22 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
 
     if (isSupremeDirectorPrompt) {
       return [
-        `Fifteen minutes later, the roaring downdraft of twin turbine engines drowned out the murmurs of the stunned recruiters in the plaza.`,
-        `A massive, heavily armored Obsidian Aegis executive dropship descended onto the campus landing pad. The hydraulic ramp hissed open, and the remaining scouts from the minor leagues practically tripped over themselves to back away.`,
-        `Stepping down the ramp was Gabriella Kazumi de Vara, Supreme Director of Obsidian Aegis.`,
-        `She wore a pristine, military-cut obsidian mantle draped over her shoulders, radiating an oppressive, terrifying authority that made seasoned Vanguard hunters hold their breath. Her sharp, dark eyes scanned the courtyard, freezing the blood of every corporate scout who dared to linger.`,
+        `Fifteen minutes later, the loud roar of twin jet engines drowned out the whispers of the scouts in the plaza.`,
+        `A heavy black executive dropship landed right onto the campus pad. The back ramp opened with a loud hiss, and the recruiters backed away as fast as they could.`,
+        `Walking down the ramp was Gabriella Kazumi de Vara, Supreme Director of Obsidian Aegis.`,
+        `She wore a sharp black military coat over her shoulders. Just her presence alone was enough to make everyone in the courtyard go dead silent. Her dark eyes swept the crowd, and nobody dared to make a sound.`,
         `Then, her eyes landed on William.`,
-        `The terrifying, absolute aura of the Supreme Director vanished in an instant. Her sharp expression melted into a bright, radiant beam that perfectly mirrored her younger brother’s sunny charm.`,
-        `"Liam!" Kazumi practically squealed, abandoning all pretense of military decorum as she hurried across the cobblestones.`,
-        `Before William could even blink, Kazumi threw her arms around him and squished both of his cheeks between her manicured hands. "Oh, look at you! You're getting taller, and your face is just as adorable as ever! Eleanor, look at him, isn't he just the cutest thing?"`,
-        `William didn't pull away or complain. His cheeks were squished together, making his lips pout slightly, but his dark eyes remained fixed on Kazumi with that exact same calm, sleepy, and entirely unbothered resting face he always wore.`,
-        `Gabrielle burst out laughing, leaning casually against the VIP pavilion's railing. "Careful, Kazumi. He just turned a senior's enchanted plate armor to dust by staring at it. You're going to ruin his new edgy reputation."`,
-        `"Oh, hush, Gabby," Kazumi said, finally letting go of William's face only to reach out and aggressively ruffle Gabrielle’s golden hair, treating him exactly the same way Gabrielle constantly treated William. "You two are still my little boys. It feels like just yesterday I was patching up your scraped knees at the training citadel."`,
-        `Eleanor walked up with a dry, amused smirk, bumping her shoulder playfully against Kazumi's. The two women shared a quick, familiar fist bump—a quiet testament to the years they had spent growing up side-by-side, perfectly mirroring the unbreakable bond between William and Gabrielle.`,
-        `"They've grown up a bit, Kaz," Eleanor noted, crossing her arms as she looked between the two boys. "Enough to shatter a Class-Zero simulation grid, humiliate three disaster-class entities on a live broadcast, and send the entire Global Directorate into an administrative panic."`,
-        `At the mention of the guild's business, the warm, doting older sister vanished.`,
-        `Kazumi’s posture straightened, the bright smile snapping shut into a flat, unforgiving line. Her brown eyes turned sharp and commanding, instantly slipping back into the role of the Supreme Director.`,
-        `"Yes. About that," Kazumi said, her voice dropping into a tone that brooked absolutely zero argument. "The International Council has summoned a tribunal regarding the Nameless Chant, and every major guild is currently trying to draft you to weaponize it. Get in the transport, both of you. We have family matters to discuss."`
+        `Her stern boss face disappeared in an instant. Her face lit up with a huge, bright smile.`,
+        `"Liam!" Kazumi squealed happily, dropping all serious manners as she ran across the stones.`,
+        `Before William could even move, Kazumi wrapped her arms around him and squished both of his cheeks with her hands. "Oh, look at you! You got taller, and your face is still as cute as ever! Eleanor, look at him, isn't he the cutest?"`,
+        `William didn't pull away or complain. His cheeks were squished together, but his dark eyes stayed calm, sleepy, and completely unbothered, just like always.`,
+        `Gabrielle started laughing, leaning back against the metal railing. "Careful, Kazumi. He just turned a senior's armor to dust with a glare. You're going to ruin his scary reputation."`,
+        `"Oh, be quiet, Gabby," Kazumi said, letting go of William's cheeks only to reach over and mess up Gabrielle’s golden hair, treating him like a little kid. "You two are still my boys. It feels like yesterday I was putting band-aids on your scraped knees."`,
+        `Eleanor walked up with an amused grin and bumped shoulders with Kazumi. They shared a quick fist bump—they had grown up together, just like William and Gabrielle.`,
+        `"They grew up a little, Kaz," Eleanor said, crossing her arms. "Enough to break a training room grid, beat three top monsters on live TV, and cause pure panic among the guild leaders."`,
+        `The moment work was mentioned, the warm big sister vanished.`,
+        `Kazumi stood straight, her smile snapping shut. Her eyes turned sharp and serious again, instantly back in boss mode.`,
+        `"Yeah. About that," Kazumi said, her voice flat and serious, leaving no room for argument. "The high council called a meeting about the Nameless Chant, and every guild wants to draft you both. Get in the ship. We have family matters to talk about."`
       ].join("\n\n");
     }
 
@@ -763,198 +780,198 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
 
       switch (scenario) {
         case "walk_a":
-          if (isSarcastic) return `"I love how completely normal our days are turning out to be," ${speakerName} quipped, looking up with dry amusement. "Truly, a masterclass in staying under the radar."`;
-          if (isScholarly) return `"The sequence doesn't add up if you evaluate the timeline objectively," ${speakerName} observed quietly, watching the path ahead. "There was an intentional forty-minute gap between the alert and the response."`;
-          if (isGritty) return `"Keep your chin up and don't look like you're searching for an exit," ${speakerName} warned in an undertone. "People pick up on nerves faster than you think."`;
-          if (isFormal) return `"One cannot help but note the heightened scrutiny currently directed toward our sector," ${speakerName} remarked with measured composure.`;
-          if (isPoetic) return `"Even the air carries an unquiet pulse today," ${speakerName} murmured softly, watching leaves swirl across the stone. "As if the horizon itself is waiting for an excuse to break."`;
-          if (isCryptic) return `"Listen to the rhythm of the footfalls around us," ${speakerName} whispered, eyes half-lidded. "The crowd walks fast, but what trails them walks faster."`;
-          return `"You know everyone's talking about what happened yesterday, right?" ${speakerName} remarked, glancing sideways with an easy grin. "By tomorrow morning, half the place is going to think we planned the whole thing from the start."`;
+          if (isSarcastic) return `"I love how completely normal our days are," ${speakerName} said with a dry laugh. "We're doing great at staying out of trouble."`;
+          if (isScholarly) return `"The timing doesn't make sense if you look at the facts," ${speakerName} said quietly, looking ahead. "There was an intentional forty-minute gap between the alarm and the response."`;
+          if (isGritty) return `"Keep your chin up and don't look like you're looking for an exit," ${speakerName} warned quietly. "People notice nerves fast."`;
+          if (isFormal) return `"People are watching us closely today," ${speakerName} said in a calm, steady voice.`;
+          if (isPoetic) return `"The air feels restless today," ${speakerName} said softly, watching leaves blow across the ground. "Like something is about to happen."`;
+          if (isCryptic) return `"Listen to the steps around us," ${speakerName} whispered. "Everyone is in a hurry, but what's following them is faster."`;
+          return `"You know everyone's talking about yesterday, right?" ${speakerName} said with an easy smile. "By tomorrow, half the school will think we planned the whole thing."`;
 
         case "walk_b":
-          if (isCasual) return `"Honestly? I'm not going to lose sleep over it," ${speakerName} laughed softly, adjusting their stride. "We did what made sense at the time. As long as we stick together, the rumors will burn themselves out."`;
-          if (isScholarly) return `"Precisely why we need to verify the primary records before noon," ${speakerName} countered, tapping a finger against their sleeve. "If the discrepancy is logged officially, our margin for error drops to zero."`;
-          if (isGritty) return `"Let them watch," ${speakerName} muttered, jaw set as they scanned the crowd without turning their head. "Watching doesn't mean they know what's coming. We stick to the route."`;
-          if (isFormal) return `"A prudent assessment," ${speakerName} agreed with a slight incline of the head. "However, let us ensure our demeanor remains entirely unreadable to curious onlookers."`;
-          if (isPoetic) return `"Then let the rumor run like wild grass before the flame," ${speakerName} replied, a quiet smile gracing their lips. "The truth has deeper roots than idle talk."`;
-          if (isCryptic) return `"Let them speak of yesterday," ${speakerName} answered softly. "Yesterday is an empty shell. It is tomorrow that has already drawn its blade."`;
-          return `"Let them speculate," ${speakerName} answered smoothly, tilting their head back with an unbothered smirk. "Panic keeps people observant. Besides, if anyone actually had the courage to ask us directly, they wouldn't like the answers anyway."`;
+          if (isCasual) return `"Honestly? I'm not worried about it," ${speakerName} laughed softly, keeping pace. "We did what made sense. The rumors will die down soon."`;
+          if (isScholarly) return `"That's why we need to check the records before noon," ${speakerName} answered. "If it's written down officially, we have to be careful."`;
+          if (isGritty) return `"Let them stare," ${speakerName} muttered, eyes on the path. "Staring doesn't mean they know anything. Keep walking."`;
+          if (isFormal) return `"Good point," ${speakerName} agreed with a slight nod. "Let's stay calm and give them nothing to talk about."`;
+          if (isPoetic) return `"Let the rumors spread like dry grass," ${speakerName} answered with a quiet smile. "The truth won't change."`;
+          if (isCryptic) return `"Let them talk about yesterday," ${speakerName} answered softly. "Yesterday is done. It's tomorrow we need to watch."`;
+          return `"Let them talk," ${speakerName} said with an easy smirk. "If anyone actually asked us directly, they wouldn't like the answer anyway."`;
 
         case "search_a":
-          if (isSarcastic) return `"Well, look at that. Someone actually went through the trouble of hiding something," ${speakerName} said with a wry grin. "Ten points for effort, zero points for originality."`;
-          if (isScholarly) return `"Notice the alignment of the seal," ${speakerName} pointed out, leaning in to examine the mechanism. "The wear patterns indicate recent access—likely within the last twenty-four hours."`;
-          if (isGritty) return `"Got something," ${speakerName} grunted, keeping one hand free as they checked the compartment. "Take a look, but make it fast. We don't have all day."`;
-          if (isFormal) return `"Remarkable. This registry was clearly intended to remain concealed from general scrutiny," ${speakerName} observed with measured poise.`;
-          return `"Found something," ${speakerName} said under their breath, pulling the drawer clear. "Take a look at this—it's dated from earlier this morning."`;
+          if (isSarcastic) return `"Well, look at that. Someone actually tried to hide something," ${speakerName} said with a grin. "Ten points for trying."`;
+          if (isScholarly) return `"Look at the lock," ${speakerName} pointed out, leaning in. "The marks show someone opened this recently—probably in the last twenty-four hours."`;
+          if (isGritty) return `"Found it," ${speakerName} grunted, checking the box. "Take a look, but make it fast."`;
+          if (isFormal) return `"Interesting. Someone clearly wanted to keep this hidden," ${speakerName} said calmly.`;
+          return `"Found something," ${speakerName} whispered, pulling out the folder. "Look at this—it's from this morning."`;
 
         case "search_b":
-          if (isCasual) return `"Wait, are you serious? Let me see that," ${speakerName} said, stepping in closer. "If that's what I think it is, someone's in deep trouble."`;
-          if (isScholarly) return `"Cross-reference the serial numbers with the primary index," ${speakerName} urged quietly. "If the signatures match, we've found the source of the leak."`;
-          if (isGritty) return `"Pocket it and shut the latch," ${speakerName} said, eyes darting toward the entryway. "Don't leave fingerprints, and get moving."`;
-          if (isFormal) return `"We must handle this with the utmost delicacy," ${speakerName} cautioned softly. "Possession of such documentation carries severe ramifications."`;
-          return `"Don't just stand there admiring it," ${speakerName} murmured with a quick smirk. "Memorize what you need and let's clear out before the watch rotates."`;
+          if (isCasual) return `"Wait, are you serious? Let me see that," ${speakerName} said, stepping closer. "Someone is in big trouble."`;
+          if (isScholarly) return `"Check the serial numbers against the main list," ${speakerName} urged quietly. "If they match, we found the leak."`;
+          if (isGritty) return `"Pocket it and shut the box," ${speakerName} said, watching the door. "No fingerprints. Let's move."`;
+          if (isFormal) return `"Be very careful with that," ${speakerName} warned softly. "Getting caught with this is dangerous."`;
+          return `"Don't just stand there staring," ${speakerName} said with a grin. "Grab what you need and let's go before guards show up."`;
 
         case "combat_a":
-          if (isSarcastic) return `"Right, because talking it out like civilized people was just too boring," ${speakerName} called out, bracing their stance with a sharp grin.`;
-          if (isScholarly) return `"Their formation is fractured—focus on the flank!" ${speakerName} directed, analyzing the opening with calm precision.`;
-          if (isGritty) return `"Down, now!" ${speakerName} barked, slamming forward to hold the line. "Move your feet or get dragged!"`;
-          if (isFormal) return `"Hold your ground!" ${speakerName} commanded with authoritative composure. "Maintain distance and exploit their overreach."`;
-          return `"On your guard!" ${speakerName} shouted, shifting weight to meet the incoming rush. "Here they come!"`;
+          if (isSarcastic) return `"Right, because talking it out like normal people was too boring," ${speakerName} called out, getting ready with a grin.`;
+          if (isScholarly) return `"Their line is broken—hit them from the side!" ${speakerName} called out, spotting the opening.`;
+          if (isGritty) return `"Get down, now!" ${speakerName} shouted, charging forward. "Move your feet or get hit!"`;
+          if (isFormal) return `"Hold your ground!" ${speakerName} shouted in a firm voice. "Watch your distance and strike back!"`;
+          return `"Watch out!" ${speakerName} shouted, bracing for the rush. "Here they come!"`;
 
         case "combat_b":
-          if (isCasual) return `"Already on it!" ${speakerName} yelled back, sidestepping the recoil and locking down the opening. "Watch your left!"`;
-          if (isScholarly) return `"Targeting vector established," ${speakerName} reported, executing the counter-move without hesitation. "Push through while they recalibrate!"`;
-          if (isGritty) return `"Clear the lane!" ${speakerName} snarled, executing the strike with ruthless momentum. "Go, go, go!"`;
-          if (isFormal) return `"Understood. Securing the perimeter forthwith," ${speakerName} answered with razor focus.`;
-          return `"Covering you now!" ${speakerName} called back, seizing the advantage before the counter-attack could form.`;
+          if (isCasual) return `"On it!" ${speakerName} yelled back, dodging the hit. "Watch your left!"`;
+          if (isScholarly) return `"Found an opening!" ${speakerName} called out, striking back right away. "Push forward now!"`;
+          if (isGritty) return `"Out of the way!" ${speakerName} shouted, hitting hard. "Go, go, go!"`;
+          if (isFormal) return `"Understood! I'll cover the side!" ${speakerName} shouted back.`;
+          return `"I've got your back!" ${speakerName} called out, jumping in to help.`;
 
         case "rest_a":
-          if (isSarcastic) return `"If sitting here doing absolutely nothing is a crime, lock me up," ${speakerName} sighed, leaning back against the bench with visible relief.`;
-          if (isScholarly) return `"Even thirty minutes of downtime should allow us to consolidate our findings," ${speakerName} noted, setting down their notes with calculated care.`;
-          if (isGritty) return `"Sit, catch your breath, and stay alert," ${speakerName} muttered, taking a sip from the cup without relaxing their posture.`;
-          if (isFormal) return `"A momentary respite is both well-earned and strategically advantageous," ${speakerName} remarked, resting hands atop the table.`;
-          return `"Finally, a minute to actually think," ${speakerName} breathed, settling onto the bench and letting the tension bleed from their shoulders.`;
+          if (isSarcastic) return `"If sitting here doing nothing is a crime, call the police," ${speakerName} sighed, leaning back against the bench with relief.`;
+          if (isScholarly) return `"Thirty minutes of rest will give us time to think," ${speakerName} said, setting down the notes.`;
+          if (isGritty) return `"Sit down, catch your breath, and stay sharp," ${speakerName} said, taking a sip from the cup.`;
+          if (isFormal) return `"A short break will do us good," ${speakerName} said, sitting down at the table.`;
+          return `"Finally, a minute to breathe," ${speakerName} said, sinking into the chair.`;
 
         case "rest_b":
-          if (isCasual) return `"Don't get too comfortable," ${speakerName} laughed, taking a seat opposite. "Knowing our luck, we've got about five minutes before something else catches on fire."`;
-          if (isSarcastic) return `"Enjoy the peace while it lasts," ${speakerName} replied with a deadpan grin. "In five minutes, someone is definitely going to ruin it."`;
-          if (isScholarly) return `"Agreed. Let us review the primary objectives while we remain undisturbed," ${speakerName} replied, leaning forward in focused discussion.`;
-          if (isGritty) return `"Drink your coffee," ${speakerName} grunted. "Soon as that bell rings, we're back on the clock."`;
-          if (isFormal) return `"Indeed. Let us utilize this interlude to prepare for what inevitably lies ahead," ${speakerName} agreed smoothly.`;
-          return `"Tell me about it," ${speakerName} replied with an easy chuckle, settling in. "So what's the plan once the afternoon sessions start?"`;
+          if (isCasual) return `"Don't get too comfortable," ${speakerName} laughed, sitting down across from him. "With our luck, something will happen in five minutes."`;
+          if (isSarcastic) return `"Enjoy the quiet while it lasts," ${speakerName} said with a deadpan grin. "Someone is definitely going to ruin it soon."`;
+          if (isScholarly) return `"Agreed. Let's go over our plan while it's still quiet," ${speakerName} said, leaning forward.`;
+          if (isGritty) return `"Drink your coffee," ${speakerName} grunted. "When that bell rings, we're back to work."`;
+          if (isFormal) return `"Indeed. Let's use this time to get ready for what comes next," ${speakerName} agreed.`;
+          return `"Tell me about it," ${speakerName} laughed, relaxing into the chair. "So what's the plan for this afternoon?"`;
 
         case "dialogue_reply":
-          if (isSarcastic) return `"Oh, fantastic question. Let's debate that while the clock is ticking," ${speakerName} remarks with a dry smirk. "Tell you what: if we make it through the afternoon, I'll buy you a coffee and we can dissect it in detail."`;
-          if (isScholarly) return `"The premise holds, but your conclusion overlooks the primary variable," ${speakerName} notes, eyes narrowing in thought. "Whoever authorized that transfer had elevated credentials. We should assume our movements are already logged."`;
-          if (isGritty) return `"Keep your voice down," ${speakerName} grunts, eyes flicking toward the perimeter. "Walls have ears, and we don't have the luxury of being careless right now."`;
-          if (isFormal) return `"A valid inquiry," ${speakerName} replies with immaculate composure. "However, discretion dictates that we reserve our conclusions until the evidence has been thoroughly corroborated."`;
-          if (isPoetic) return `"You ask of the wind what only the roots can answer," ${speakerName} murmurs softly, gaze lingering on the trembling shadows. "The truth was not misplaced; it was sealed away before the sun rose."`;
-          if (isCryptic) return `"The answer is already written where you refuse to look," ${speakerName} whispers, a faint smile touching their lips. "Listen beneath the noise. It was never an accident."`;
-          return `"Look, you're asking the one thing everyone around here is trying to sweep under the rug," ${speakerName} says, leaning in with a quick grin and lowering their voice. "The truth is, whoever pulled this off knew exactly what they were doing."`;
+          if (isSarcastic) return `"Great question. Let's argue about it while time runs out," ${speakerName} said with a dry grin. "If we survive the afternoon, I'll buy you a coffee and we can talk about it all day."`;
+          if (isScholarly) return `"That makes sense, but you're missing one big detail," ${speakerName} said, eyes narrowing. "Whoever did this had full access. We should assume they're already tracking us."`;
+          if (isGritty) return `"Keep your voice down," ${speakerName} warned, glancing at the door. "People are listening. We can't be careless."`;
+          if (isFormal) return `"That's a good question," ${speakerName} answered in a calm voice. "Let's wait until we see the proof before making up our minds."`;
+          if (isPoetic) return `"The wind won't tell you the answer," ${speakerName} whispered, looking out the window. "The truth was hidden long before we got here."`;
+          if (isCryptic) return `"The answer is right where you're not looking," ${speakerName} whispered with a faint smile. "Listen closely. This was never an accident."`;
+          return `"Look, you're asking the one thing everyone is trying to ignore," ${speakerName} said, leaning in and keeping his voice down. "Whoever did this knew exactly what they were doing."`;
       }
     };
 
-    // 2. Arrival / Authority / Executive Scene Generation (Dynamic, Unconstrained 12-15 paragraphs)
+    // 2. Arrival / Authority / Executive Scene Generation (Dynamic, Simple English terms)
     if (isArrival) {
       const authorityRole = promptNames.find(n => /director|commander|general|master|chancellor|dean/i.test(n)) || "The Supreme Director";
       return [
-        `The heavy downdraft of high-output atmospheric turbines swept across the open courtyard, scattering loose parchment and drowning out the murmurs of the stunned onlookers gathered along the pavilion.`,
-        `A reinforced executive transport descended smoothly onto the campus landing pad. The hydraulic pressure released with a sharp hiss as the main ramp lowered, and nearby scouts and cadets practically tripped over their own heels scrambling to clear a respectful perimeter.`,
-        `Stepping down the ramp was ${authorityRole}, draped in an immaculate military-cut mantle that radiated unyielding authority.`,
-        `Seasoned operatives in the gathering crowd held their breath under that measured gaze. Sharp, dark eyes swept the perimeter, freezing the blood of anyone bold enough to linger.`,
-        `Then, the gaze landed directly on ${nameA}.`,
-        `The oppressive aura vanished in a single breath. The stern composure melted into an open, radiant beam of genuine warmth.`,
-        `"${nameA}!" they called out, abandoning all pretense of formal protocol while hurrying across the stone plaza.`,
-        `Before ${nameA} could take half a step, two hands reached out to firmly catch both of his cheeks with unrestrained affection. "Look at you! Standing tall and looking just as completely unbothered as always. Isn't this just the most ridiculous sight?"`,
-        `${nameA} didn't pull away or raise a complaint. Even with cheeks lightly pinched together, his eyes stayed fixed with that exact same calm, sleepy, and entirely unbothered resting expression he always wore.`,
-        `${nameB} let out an open laugh from the railing. "Careful. You're going to ruin his reputation before the semester even gets underway."`,
-        `"Oh, hush," came the immediate retort, letting go of ${nameA} only to reach over and playfully ruffle ${nameB}'s hair with practiced, older-sibling familiarity. "You two are still the same kids who used to track mud across the training hall. Don't pretend you've outgrown that."`,
-        `Nearby observers watched in stunned disbelief, struggling to reconcile the feared authority of the executive director with the easy, doting familiarity unfolding before them.`,
-        `Then, the mention of official business shifted the air.`,
-        `The smile snapped shut. The relaxed posture straightened into a flat, unforgiving line of command, and the brown eyes hardened back into cold, absolute focus.`,
-        `"Now then," the voice dropped into a tone that brooked zero argument. "The council has formally convened, and every major faction is currently trying to claim jurisdiction over what you did yesterday. Get inside the transport, both of you. We have family matters to discuss."`
+        `The loud roar of twin jet engines swept across the courtyard, blowing dry leaves and drowning out the whispers of the stunned crowd along the walkway.`,
+        `A heavy black transport ship landed right on the campus pad. The back ramp opened with a sharp hiss, and the recruiters and students backed away as fast as they could.`,
+        `Stepping down the ramp was ${authorityRole}, wearing a sharp military coat over their shoulders.`,
+        `Just their presence alone made everyone on the campus go dead silent. Dark, sharp eyes swept the courtyard, and nobody dared to speak or make a sudden move.`,
+        `Then, their eyes landed on ${nameA}.`,
+        `The serious boss face vanished in an instant. Their expression melted into a huge, warm smile.`,
+        `"${nameA}!" they called out, dropping all formal rules as they hurried across the stone plaza.`,
+        `Before ${nameA} could take half a step, two hands reached out and squished both of his cheeks with open affection. "Look at you! Standing tall and looking completely unbothered as always. Isn't this just the cutest sight?"`,
+        `${nameA} didn't pull away or complain. Even with his cheeks lightly squished together, his dark eyes stayed calm, sleepy, and completely relaxed, just like always.`,
+        `${nameB} laughed from the railing. "Careful. You're going to ruin his tough reputation before classes even start."`,
+        `"Oh, be quiet," came the quick reply, letting go of ${nameA} only to reach over and mess up ${nameB}'s hair like a doting older sibling. "You two are still the same kids who used to track mud across the floor. Don't act like you're all grown up."`,
+        `Everyone nearby watched in pure shock, trying to understand how the feared director could be so playful and warm.`,
+        `Then, official business was mentioned, and the air shifted.`,
+        `The smile snapped shut. Their posture straightened into a serious, cold line of command, and their brown eyes turned sharp again.`,
+        `"Now then," their voice dropped, leaving no room for argument. "The council called a meeting, and every major group is trying to claim what you did yesterday. Get inside the ship, both of you. We have family matters to talk about."`
       ].join("\n\n");
     }
 
-    // 3. Walking / Campus / Transit (Organic, Dynamic 10-12 paragraphs)
+    // 3. Walking / Campus / Transit (Simple English terms, living campus)
     if (isWalkingOrTransit) {
       const dialogueA = silentA
-        ? `*${nameA} walked in deliberate silence, his posture relaxed and watchful as he acknowledged the scrutiny with a subtle tilt of his chin.*`
+        ? `*${nameA} walked in calm silence, hands in his pockets as he noticed the stares with a slight tilt of his head.*`
         : getToneLine(nameA, toneA, "walk_a");
 
       const dialogueB = silentB
-        ? `*${nameB} offered no spoken rejoinder, though the sharp, dismissive glance cast toward the onlookers conveyed absolute certainty.*`
+        ? `*${nameB} didn't say a word, though a quick sideways look told everyone to mind their own business.*`
         : getToneLine(nameB, toneB, "walk_b");
 
       return [
-        `A crisp autumn breeze swept across the wide campus quadrangle, sending amber leaves skimming along the polished concrete walkways that linked the glass-paneled lecture halls to the older collegiate brick pavilions.`,
-        `${nameA} walked with an easy, unhurried stride, hands loosely buried in jacket pockets, while ${nameB} matched the cadence step for step under the pale morning sky.`,
-        `In the background, campus routine continued in waves—the distant chime of the library clock tower, the low hum of an electric maintenance cart, and the muffled chatter of students heading toward the morning seminars.`,
-        `Yet beneath that ordinary routine, an unmistakable ripple of recognition followed their path.`,
-        `A small huddle of students leaning against the low balustrade near the fountain abruptly lowered their voices as the pair drew near. One underclassman nudged his friend's sleeve, casting a sharp, lingering look in their direction before hastily looking back down into his notes the moment ${nameA}'s gaze drifted across the walkway.`,
-        `Across the steps, two others carrying heavy folders paused mid-stride, whispering behind raised hands as they tracked the pair's progress across the cobblestones.`,
+        `A cool morning breeze blew across the campus lawn, carrying dry leaves along the walkways between the classroom buildings.`,
+        `${nameA} walked with an easy, relaxed pace, hands in his pockets, while ${nameB} walked right beside him under the pale morning sky.`,
+        `Around them, normal campus life went on as usual—the sound of the clock tower ringing, doors opening down the hall, and the chatter of students on their way to class.`,
+        `Still, people were clearly watching them.`,
+        `A small group of students sitting near the fountain got quiet as soon as ${nameA} and ${nameB} walked past. One of them nudged his friend and pointed with his eyes, but quickly looked back down at his phone the moment ${nameA} glanced over.`,
+        `Across the steps, two other students stopped and whispered behind their hands, tracking every step the pair took.`,
         dialogueA,
         dialogueB,
-        `*${nameA} offered a faint, unbothered smirk, adjusting his pace without giving the surrounding whispers so much as a second glance.*`,
+        `*${nameA} gave a small, calm shrug, walking ahead without caring about the whispers around them.*`,
         (toneA.includes("scholarly") || toneB.includes("scholarly"))
-          ? `"Which brings us back to the primary contradiction," ${nameA} noted, voice dropping another register. "Who authorized the second decryption key if the supervisor was off-site?"\n\n"Someone with root privileges," ${nameB} replied, eyes narrowing in thought. "And there are only three people on this campus who fit that description."`
+          ? `"Which brings us back to the real question," ${nameA} said, keeping his voice down. "Who authorized the second key if the supervisor wasn't even here?"\n\n"Someone with full access," ${nameB} answered, eyes narrowing. "And there are only three people on this campus who can do that."`
           : (toneA.includes("gritty") || toneB.includes("gritty"))
-            ? `"You got the drive secured?" ${nameA} asked, not turning his head.\n\n"Tucked where nobody finds it without a full search," ${nameB} replied under their breath. "Just watch the west exit."`
-            : `"Fair point," ${nameA} added with an amused shake of the head, "though if the dean asks for a formal explanation during afternoon review, your 'let them stare' defense might need some legal polish."\n\n"I have plenty of polish," ${nameB} shot back with a razor-sharp grin. "It's called showing them the exact timestamps they thought they deleted. That usually shuts people up rather quickly."`,
-        `Up ahead, near the department entrance, the electronic chime of the campus communications array cut through the air, flashing a scheduled advisory across the overhead displays as a lone figure near the arcade watched them with unwavering focus before turning into the east corridor.`
+            ? `"You have the drive safe?" ${nameA} asked quietly, not turning his head.\n\n"Tucked away where nobody finds it," ${nameB} replied under his breath. "Just watch the door."`
+            : `"Fair point," ${nameA} added with an amused smile. "Though if the dean asks us what happened, your 'let them stare' plan might not work."\n\n"It will work fine," ${nameB} shot back with a quick grin. "I'll just show them the exact files they thought they deleted. That always shuts people up fast."`,
+        `Up ahead, near the main hall entrance, an announcement chime rang out, flashing a notice on the screens as someone near the doorway watched them closely before turning down the hall.`
       ].join("\n\n");
     }
 
-    // 4. Spoken Dialogue / Inquiries (8-10 organic paragraphs)
+    // 4. Spoken Dialogue / Inquiries (Simple English terms)
     if (spokenText) {
       const activeRespondent = silentB ? (silentA ? null : nameA) : nameB;
       const respondentTone = activeRespondent === nameA ? toneA : toneB;
       const otherPerson = activeRespondent === nameA ? nameB : nameA;
 
       return [
-        `The question hung between them in the cool air, demanding an answer while their footsteps maintained an unhurried, deliberate cadence.`,
-        `Across the walkway, several passing students cast lingering, curious glances in their direction, picking up on the sudden gravity in their posture. A couple of underclassmen seated near the courtyard steps subtly leaned closer, straining to catch the thread before ${nameA}'s warning glance sent them quickly looking down into their binders.`,
+        `The question hung in the air between them as they kept walking at a steady pace.`,
+        `Across the walkway, several passing students gave them curious looks, noticing how serious they both looked. A couple of freshmen near the steps leaned in to hear, but ${nameA}'s quick look made them look away fast.`,
         activeRespondent
           ? getToneLine(activeRespondent, respondentTone, "dialogue_reply")
-          : `*${nameB} remains completely silent, their expression unyielding and guarded. A sharp, intentional gesture toward the corridor conveys all the urgency that spoken words never could.*`,
+          : `*${nameB} stayed quiet, but pointed toward the side hallway to show that they needed to move fast.*`,
         (silentA || activeRespondent === nameA)
-          ? `*${otherPerson} held the line with quiet intensity, eyes scanning the perimeter to make certain no one had drawn close enough to decipher the subtext.*`
+          ? `*${otherPerson} stayed alert, looking around to make sure nobody was standing close enough to listen.*`
           : (toneA.includes("sarcastic") || toneB.includes("sarcastic"))
-            ? `"You're unusually focused today," ${otherPerson} remarked with a quick, measuring smirk. "Usually you pretend not to care until the alarms are actually ringing."\n\n"I care about not being interrogated in a windowless room," ${activeRespondent} retorted with a dry smile. "There's a subtle distinction."`
-            : `"We both knew this was coming," ${otherPerson} replied quietly, stepping in closer. "The only real question is whether we move first or wait for them to make their play."\n\n"We never wait," ${activeRespondent} answered firmly. "Waiting is how you end up reacting to someone else's agenda."`,
-        `The silence that settled between them carried unmistakable weight, sealing an unspoken consensus as they closed the distance between planning and execution.`,
-        `Ahead, near the department entrance, a digital display blinked to life with a priority notification, drawing the gaze of dozens of gathering students while a lone observer watched ${nameA} and ${nameB} from the top step.`
+            ? `"You're unusually focused today," ${otherPerson} said with a smirk. "Usually you act like you don't care until the alarms go off."\n\n"I care about staying out of trouble," ${activeRespondent} replied with a dry smile. "There's a big difference."`
+            : `"We both knew this was coming," ${otherPerson} said quietly, stepping closer. "The only question is if we move first or wait for them to make a move."\n\n"We don't wait," ${activeRespondent} answered firmly. "Waiting is how you lose."`,
+        `The two of them exchanged a quick, knowing look, completely on the same page.`,
+        `Ahead, near the entrance, a screen turned on with a new notice, catching the attention of nearby students while someone watched ${nameA} and ${nameB} from the top step.`
       ].join("\n\n");
     }
 
-    // 5. Investigation / Search (8-10 organic paragraphs)
+    // 5. Investigation / Search (Simple English terms)
     if (isInvestigation) {
       return [
-        `The mechanism yielded with a muted metallic click, the seam separating smoothly beneath careful pressure to reveal a recessed compartment built flush into the wall panel.`,
-        `Inside, neatly tucked away from casual inspection, rested a heavy dossier bound with faded crimson tape, accompanied by an encrypted storage drive bearing a Department oversight watermark.`,
-        `Outside in the hallway, the distant sound of student foot traffic and locker latches continued unabated, completely oblivious to what had just been brought to light.`,
+        `The lock clicked open with a quiet snap. The wall panel slid aside smoothly, revealing a small hidden compartment inside.`,
+        `Inside rested a thick folder tied with red tape, right next to a small black storage drive marked with the Department seal.`,
+        `Out in the hallway, the sound of students opening lockers and walking by continued as usual, completely unaware of what was happening inside.`,
         silentA
-          ? `*${nameA} pointed directly to the timestamp on the upper casing, eyebrows raised in silent warning.*`
+          ? `*${nameA} pointed right at the date on the folder, raising his eyebrows in warning.*`
           : getToneLine(nameA, toneA, "search_a"),
         silentB
-          ? `*${nameB} nodded once, already watching the doorway and signaling urgency with a sharp gesture.*`
+          ? `*${nameB} nodded once, watching the door and signaling to hurry up.*`
           : getToneLine(nameB, toneB, "search_b"),
-        `"Look at the signature," ${nameA} whispered, carefully turning the corner of the topmost sheet. "This wasn't authorized by the registrar. It came straight from the provost's private terminal."`,
-        `"Which means we have about two minutes before the automated audit flags the access," ${nameB} answered, pocketing the drive with practiced speed.`,
-        `In the corridor outside, the sudden squeak of rubber soles against polished tile announced an approaching security patrol, cutting short any further debate and forcing an immediate retreat.`
+        `"Look at the name," ${nameA} whispered, carefully turning the top page. "This didn't come from the front office. It came straight from the director's private computer."`,
+        `"Which means we have about two minutes before someone notices," ${nameB} answered, pocketing the drive fast.`,
+        `Down the hall, the squeak of shoes on tile signaled a security guard walking their way, ending the conversation and telling them it was time to leave.`
       ].join("\n\n");
     }
 
-    // 6. Combat / Action (9-11 organic paragraphs)
+    // 6. Combat / Action (Simple English terms)
     if (isCombatOrAction) {
       return [
-        `The sudden impact shattered the tense stillness, sending a violent shudder through the room as wood splintered and the line of engagement erupted into raw kinetic motion.`,
-        `Bystanders and onlookers instantly scattered in pandemonium—chairs scraped wildly against the floor, books and trays tumbled to the tile, and frantic shouts echoed down the hallway as a crowd scrambled for the exit doors, clearing a wide, chaotic perimeter.`,
+        `The sudden hit broke the quiet, shaking the entire room as wood snapped and a fight broke out in an instant.`,
+        `Students and bystanders scattered in panic—chairs scraped loudly against the floor, bags dropped to the ground, and people ran for the doors to get out of the way.`,
         silentA
-          ? `*${nameA} launched forward without a sound, intercepting the line of sight and locking down the forward approach.*`
+          ? `*${nameA} moved forward instantly, stepping between the threat and the crowd.*`
           : getToneLine(nameA, toneA, "combat_a"),
         silentB
-          ? `*${nameB} secured the flank in rigid silence, weapon readied and eyes tracking every micro-movement.*`
+          ? `*${nameB} guarded the side in silence, ready to strike and watching every move.*`
           : getToneLine(nameB, toneB, "combat_b"),
-        `Boots skidded hard across the slick floor as the counter-strike connected, forcing the opposing threat backward into the corridor and opening a narrow window of escape.`,
-        `From the shadows beyond the threshold, reinforcements began to converge, their silhouettes cutting through the flickering lights as emergency alarms began their piercing wail.`
+        `Boots skidded hard across the floor as the counter-strike landed, shoving the attacker back into the hallway and opening a way out.`,
+        `Down the hall, more footsteps rushed toward them, and the sharp ring of the building's alarm filled the air.`
       ].join("\n\n");
     }
 
-    // 7. Downtime / Rest / Cafeteria (8-10 organic paragraphs)
+    // 7. Downtime / Rest / Cafeteria (Simple English terms)
     if (isDowntimeOrRest) {
       return [
-        `The ambient murmur of lunchtime chatter filtered through the commons as steam curled lazily from ceramic mugs onto the polished oak table.`,
-        `Across the room, the atmosphere was quietly observant. At a booth two rows back, a group of three upperclassmen leaned in together over half-finished trays, their eyes darting periodically toward ${nameA} and ${nameB}. Every few seconds, a whispered remark was passed, followed by a covert glance to see if either of them had noticed the attention.`,
+        `The busy sound of lunchtime chatter filled the room as warm steam rose from coffee cups on the table.`,
+        `Across the cafeteria, people were clearly paying attention. At a booth two rows back, three students leaned in over their lunch trays, looking over at ${nameA} and ${nameB} every few seconds and whispering to each other.`,
         silentA
-          ? `*${nameA} set down his cup in measured silence, observing the room with steady vigilance.*`
+          ? `*${nameA} set down his cup quietly, looking around the room with a calm face.*`
           : getToneLine(nameA, toneA, "rest_a"),
         silentB
-          ? `*${nameB} took a seat across from him, leaning in to review the situation.*`
+          ? `*${nameB} sat down across from him, leaning in to talk.*`
           : getToneLine(nameB, toneB, "rest_b"),
-        `"They're not even trying to hide it," ${nameA} noted softly, tracing a fingertip along the warm ceramic edge. "At this rate, the entire campus will have our names on a bulletin by sunset."`,
-        `"Good," ${nameB} murmured back with an easy sip. "When everyone is looking at the front door, nobody watches what's slipping through the back."`,
-        `A sudden chime from the tabletop terminal disrupted the lull, displaying an unread transmission flagged with the personal crest of the academy director.`
+        `"They're not even trying to hide it," ${nameA} said quietly, tapping the table. "By tonight, everyone on campus will be talking about us."`,
+        `"Good," ${nameB} said with a quick sip. "When everyone is looking at the front door, nobody watches what's going out the back."`,
+        `A sudden beep from the tabletop terminal cut in, showing a new message marked with the personal crest of the academy director.`
       ].join("\n\n");
     }
 
@@ -2102,13 +2119,13 @@ THE NARRATOR'S CREED & PRIME DIRECTIVE:
 3. CHARACTER VOICE & TONE ENFORCEMENT (CRITICAL):
    - Each character possesses an assigned Voice Tone (e.g. "Casual & Conversational", "Poetic & Lyrical", "Formal & Aristocratic", "Gritty & Blunt", "Scholarly & Analytical", "Cryptic & Whispering", "Sarcastic & Witty") or follows the Book Dialogue Register ("${defaultBookTone}").
    - You MUST strictly mold each character's dialogue style, diction, vocabulary, sentence length, and cadence to their assigned Voice Tone:
-     • Casual & Conversational: Use contractions ("don't", "gonna", "look"), relaxed modern cadence, everyday idioms, natural human rhythm.
-     • Poetic & Lyrical: Use elevated, metaphorical, rhythmically ornate English, lyrical cadence, evocative imagery, and philosophical reflection.
-     • Formal & Aristocratic: Use stately high English, immaculate etiquette, polite distance, elevated vocabulary, and no informal contractions.
-     • Gritty & Blunt: Use clipped, harsh, street-level sentences, hardboiled phrasing, direct and unvarnished statements.
-     • Scholarly & Analytical: Use erudite, precise technical vocabulary, deductive reasoning, analytical observations, and measured speech.
-     • Cryptic & Whispering: Use veiled allegories, hushed warnings, enigmatic riddles, and ominous undercurrents.
-     • Sarcastic & Witty: Use dry irony, biting humor, sharp cynical observations, and understated deadpan retorts.
+     • Casual & Conversational: Use contractions ("don't", "gonna", "look"), relaxed modern rhythm, everyday words, natural speech.
+     • Poetic & Lyrical: Use vivid imagery and thoughtful reflection, but keep the words simple and accessible (never archaic or convoluted).
+     • Formal & Aristocratic: Use polite distance, clear grammar, and dignified speech, but keep words simple, modern, and easy to follow.
+     • Gritty & Blunt: Use clipped, direct, street-level sentences and plain words.
+     • Scholarly & Analytical: Use clear logical explanations and precise phrasing, but keep words simple and straightforward.
+     • Cryptic & Whispering: Use quiet warnings and subtle hints with simple everyday vocabulary.
+     • Sarcastic & Witty: Use dry humor, quick comebacks, and funny deadpan observations.
    - When multiple characters interact, their spoken dialogue MUST contrast sharply based on their respective tones so that each speaker sounds unmistakably distinct!
 4. STRICT THIRD-PERSON NARRATIVE MANDATE & PROPER NAMING LAW:
    - ALL NARRATION IN THE THIRD PERSON: All scene descriptions, physical movements, environmental details, and narrative observations MUST be written strictly in the third person ("he", "she", "they", or proper names like "${leadCharName || 'Julian'}").
@@ -2126,9 +2143,23 @@ THE NARRATOR'S CREED & PRIME DIRECTIVE:
    - Director canon overrides older synopsis, prologue, and generated-story assumptions whenever they conflict.
    - Treat every bullet under WORLD LORE & AUTHOR RULES as a literal fact, not creative inspiration. When two directives conflict, the newest recorded directive wins.
    - Before writing, silently audit every planned action and line of dialogue against the named characters' Director Canon notes.
-8. LANGUAGE, GRIT & TONE:
-   - Ground narration in vivid sensory truth and atmospheric tension.
-   - Respect character voice tones strictly: keep dialogue authentic to each character's identity. Swearing and profanity are permitted when appropriate for high stakes and raw emotion.
+8. SIMPLE ENGLISH TERMS & CLEAN MODERN PROSE (CRITICAL MANDATE):
+   - USE SIMPLE, CLEAR, EVERYDAY ENGLISH: Write all narration, character dialogue, and scene descriptions in simple, accessible, and natural English terms.
+   - ABSOLUTE BAN ON THESAURUS-STUFFING & PURPLE PROSE: Never use archaic, academic, or needlessly fancy SAT words.
+     • Do NOT write words like "countenance", "taciturn", "labyrinthine", "ebullient", "ineffable", "sepulchral", "tenebrous", "lugubrious", "perspicacity", "pulchritude", "somnambulant", "rejoinder", "balustrade", "quadrangle", "brooked", "testament", "decryption", "discrepancy", "unyielding", "demeanor", "respite", "concurred", "perused".
+     • Always pick simple, modern, punchy words:
+       - Say "walked" or "stepped" (not "ambulated" or "traversed")
+       - Say "looked" or "watched" (not "scrutinized" or "surveyed")
+       - Say "dark" or "shadowy" (not "tenebrous" or "crepuscular")
+       - Say "tired" (not "enervated")
+       - Say "huge" or "giant" (not "gargantuan" or "colossal")
+       - Say "sharp" or "clear" (not "incisive" or "pellucid")
+       - Say "calm" or "quiet" (not "unyielding" or "stoic")
+       - Say "railing" or "ledge" (not "balustrade")
+       - Say "courtyard", "lawn", or "campus grounds" (not "quadrangle")
+       - Say "reply" or "answer" (not "rejoinder")
+   - KEEP SENTENCE STRUCTURE CLEAN & DIRECT: Use active Subject-Verb-Object phrasing. The reader should easily picture everything that is happening without stumbling over complicated vocabulary.
+   - Respect character voice tones strictly: keep dialogue authentic, natural, and conversational. Swearing/profanity is permitted when fitting for high stakes and raw emotion.
 9. ACTION & COMBAT (STRICT "SHOW, DON'T TELL"):
    - Absolutely NEVER use gaming terminology (strictly forbidden: "HP", "stats", "aggro", "hitbox", "mana bar", "level up", "debuff", "buff", "DPS", "cooldown", "spawn", "XP", "aurafarm").
    - Instead, describe the physical momentum, kinetic force, strain in muscles, the friction of magic, and the destruction of the surrounding environment.
@@ -2365,16 +2396,18 @@ THE NARRATOR'S REWRITE DIRECTIVE:
    - What new complications, revelations, or character dialogue emerge from this outcome? Bring fresh spoken dialogue and dynamic character interactions.
    - Infuse the scene with palpable sensory depth (lighting, weather, sound, scent, heartbeat, and tension).
 2. CHARACTER VOICE & TONE ENFORCEMENT:
-   - Each character possesses an assigned Voice Tone (e.g. "Casual & Conversational", "Poetic & Lyrical", "Formal & Aristocratic", "Gritty & Blunt", "Scholarly & Analytical", "Cryptic & Whispering", "Sarcastic & Witty") or follows the Book Dialogue Register: "${defaultBookTone}".
-   - You MUST strictly mold each character's dialogue style, diction, vocabulary, sentence length, and cadence to their assigned Voice Tone.
+   - Each character possesses an assigned Voice Tone or follows the Book Dialogue Register: "${defaultBookTone}".
+   - Strictly mold each character's dialogue style, diction, and sentence length to their tone while keeping vocabulary grounded in simple, accessible English.
 3. STRICT THIRD-PERSON NARRATIVE MANDATE (NO "YOU" / NEVER USE "PROTAGONIST"):
    - Narration must ALWAYS be written strictly in the THIRD PERSON ("he", "she", "they", or proper names like "${leadCharName || 'Julian'}").
    - NEVER address any character or reader as "you", "your", or "yours" in narration or scene descriptions (*...*). The word "you" is ONLY allowed inside spoken dialogue quotation marks ("...").
    - NEVER refer to any character as "the protagonist", "the main character", or "the hero".
 4. ROLES & AGENCY:
    - The user commands their lead character${leadCharName ? ` (${leadCharName})` : ""}. You control all NPCs, enemies, and the breathing environment. Do NOT puppet their decisions unless instructed.
-5. LANGUAGE & TONE:
-   - Simple, accessible, natural English. Eliminate generic polite AI dialogue; keep prose casual, gritty, visceral, and grounded. Swearing/profanity is permitted if fitting for the scene.
+5. SIMPLE ENGLISH TERMS & CLEAN MODERN PROSE (MANDATORY):
+   - Always write narration and dialogue in simple, clear, everyday English terms.
+   - Ban archaic, academic, or purple vocabulary (no "countenance", "balustrade", "rejoinder", "tenebrous", "scrutinize", "brooked", "quadrangle", "unyielding").
+   - Keep sentences direct, punchy, and easy to picture immediately. Swearing/profanity is permitted if fitting for the scene.
 6. ACTION & COMBAT:
    - Strictly "show, don't tell". Absolutely NO gaming terminology (no "HP", "stats", "aggro", "mana bar", etc.). Vividly describe physical impact, magical friction, and environmental destruction.
 7. FORMATTING & NARRATIVE FREEDOM:
