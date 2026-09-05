@@ -46,8 +46,6 @@ async function startServer() {
       systemInstruction?: string;
       temperature?: number;
       topP?: number;
-      presencePenalty?: number;
-      frequencyPenalty?: number;
       responseMimeType?: string;
       thinkingConfig?: { thinkingBudget?: number };
     }
@@ -76,12 +74,6 @@ async function startServer() {
           };
           if (options.systemInstruction) {
             config.systemInstruction = options.systemInstruction;
-          }
-          if (options.presencePenalty !== undefined) {
-            config.presencePenalty = options.presencePenalty;
-          }
-          if (options.frequencyPenalty !== undefined) {
-            config.frequencyPenalty = options.frequencyPenalty;
           }
           if (options.responseMimeType) {
             config.responseMimeType = options.responseMimeType;
@@ -2514,8 +2506,6 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
           systemInstruction,
           temperature: 0.85,
           topP: 0.95,
-          presencePenalty: 0.25,
-          frequencyPenalty: 0.3,
         });
       } catch (_err: any) {
         const rawMsg = String(_err?.message || "");
@@ -2741,8 +2731,6 @@ Provide the fully rewritten, updated story passage now:`;
           systemInstruction,
           temperature: 0.9,
           topP: 0.95,
-          presencePenalty: 0.25,
-          frequencyPenalty: 0.3,
         });
       } catch (_err: any) {
         rawReply = createFallbackRewrite(originalPassage, userInstruction, book);
