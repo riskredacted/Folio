@@ -421,14 +421,40 @@ async function startServer() {
       }
     }
 
+    // Gather all words that belong to demons, monsters, creatures, beasts, or hostile anomalies
+    const entityStopWords = new Set<string>([
+      "demon", "demons", "monster", "monsters", "creature", "creatures", "beast", "beasts",
+      "entity", "entities", "aberration", "aberrations", "anomaly", "anomalies", "fiend", "fiends",
+      "dragon", "dragons", "ghoul", "ghouls", "wraith", "wraiths", "spirit", "spirits",
+      "specter", "spectre", "specters", "spectres", "zombie", "zombies", "undead", "boss",
+      "threat", "threats", "mutant", "mutants", "tyran", "resonant", "field", "track"
+    ]);
+
+    const creaturePattern =
+      /\b([A-Z][a-zA-Z'’\-]+(?:\s+[A-Z][a-zA-Z'’\-]+)*)\s+(?:demon|demons|monster|monsters|creature|creatures|beast|beasts|entity|entities|aberration|aberrations|anomaly|anomalies|fiend|fiends|dragon|dragons|ghoul|ghouls|wraith|wraiths|titan|titans)\b/gi;
+    for (const match of idea.matchAll(creaturePattern)) {
+      const words = match[1].toLowerCase().split(/\s+/);
+      for (const w of words) {
+        entityStopWords.add(w.replace(/[^a-z]/g, ""));
+      }
+    }
+
     const isBlocked = (name: string): boolean => {
       if (!name) return true;
-      if (nonNameOpeners.has(name.toLowerCase())) return true;
+      const lower = name.toLowerCase().trim();
+      if (nonNameOpeners.has(lower)) return true;
       if (isNonPersonName(name)) return true;
-      const words = name.toLowerCase().split(/\s+/);
+      if (entityStopWords.has(lower)) return true;
+      if (/\b(?:demon|demons|monster|monsters|creature|creatures|beast|beasts|entity|entities|aberration|aberrations|anomaly|anomalies|fiend|fiends|dragon|dragons|titan|titans)\b/i.test(name)) return true;
+      const words = lower.split(/\s+/);
       for (const w of words) {
         const cleanW = w.replace(/[^a-z]/g, "");
-        if (institutionStopWords.has(cleanW) || NON_PERSON_LOCATION_KEYWORDS.has(cleanW) || nonNameOpeners.has(cleanW)) {
+        if (
+          institutionStopWords.has(cleanW) ||
+          NON_PERSON_LOCATION_KEYWORDS.has(cleanW) ||
+          nonNameOpeners.has(cleanW) ||
+          entityStopWords.has(cleanW)
+        ) {
           return true;
         }
       }
@@ -699,12 +725,40 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
     // Extract names explicitly mentioned in user prompt
     const promptNames = extractExplicitCharacterNames(cleanPrompt);
 
-    // Identify active characters
-    const mentionedFromBook = chars.filter((c: any) => {
+    // Helper to see if a book character is mentioned in user prompt or promptNames
+    const matchesCharacter = (c: any): boolean => {
       if (!c?.name) return false;
-      const nameLower = c.name.toLowerCase();
-      return promptLower.includes(nameLower) || promptNames.some(pn => pn.toLowerCase() === nameLower);
-    });
+      const fullLower = c.name.toLowerCase().trim();
+      if (promptLower.includes(fullLower) || promptNames.some(pn => pn.toLowerCase() === fullLower)) {
+        return true;
+      }
+      // Check individual significant name tokens (e.g. "william", "ethan", "gabrielle", "eleanor")
+      const parts = fullLower.split(/\s+/).filter((p: string) => p.length > 2 && !/^(?:de|del|della|di|da|dos|du|la|le|van|von|der|den|bin|al)$/i.test(p));
+      return parts.some((p: string) => {
+        const regex = new RegExp(`\\b${p}\\b`, "i");
+        return regex.test(cleanPrompt) || promptNames.some(pn => regex.test(pn));
+      });
+    };
+
+    // Helper to get preferred short/display name for a character based on what user typed
+    const getPreferredDisplayName = (c: any, defaultFallback: string): string => {
+      if (!c?.name) return defaultFallback;
+      const parts = c.name.trim().split(/\s+/);
+      if (parts.length === 1) return parts[0];
+      for (const part of parts) {
+        if (part.length > 2 && new RegExp(`\\b${part}\\b`, "i").test(cleanPrompt)) {
+          return part;
+        }
+      }
+      for (const pn of promptNames) {
+        if (parts.some(p => p.toLowerCase() === pn.toLowerCase())) {
+          return pn;
+        }
+      }
+      return parts[0];
+    };
+
+    const mentionedFromBook = chars.filter((c: any) => matchesCharacter(c));
 
     let charA: any = null;
     let charB: any = null;
@@ -715,33 +769,33 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
     } else if (mentionedFromBook.length === 1) {
       charA = mentionedFromBook[0];
       const otherInBook = chars.find((c: any) => c?.name && c.name.toLowerCase() !== charA.name.toLowerCase());
-      if (otherInBook) {
+      const promptOther = promptNames.find(pn => !charA.name.toLowerCase().includes(pn.toLowerCase()));
+      if (promptOther) {
+        charB = { name: promptOther, role: "Companion", voiceTone: "Sarcastic & Witty" };
+      } else if (otherInBook) {
         charB = otherInBook;
-      } else if (promptNames.length >= 2) {
-        const otherName = promptNames.find(pn => pn.toLowerCase() !== charA.name.toLowerCase()) || "Companion";
-        charB = { name: otherName, role: "Companion", voiceTone: "Sarcastic & Witty" };
       } else {
-        charB = { name: "The Companion", role: "Companion", voiceTone: "Casual & Conversational" };
+        charB = { name: "Gabrielle", role: "Fellow Student", voiceTone: "Casual & Conversational" };
       }
     } else if (promptNames.length >= 2) {
       charA = { name: promptNames[0], role: "Lead Character", voiceTone: "Casual & Conversational" };
       charB = { name: promptNames[1], role: "Companion", voiceTone: "Sarcastic & Witty" };
     } else if (promptNames.length === 1) {
       charA = { name: promptNames[0], role: "Lead Character", voiceTone: "Casual & Conversational" };
-      charB = chars[0] || { name: "The Companion", role: "Companion", voiceTone: "Sarcastic & Witty" };
+      charB = chars[0] || { name: "Gabrielle", role: "Fellow Student", voiceTone: "Sarcastic & Witty" };
     } else if (chars.length >= 2) {
       charA = chars[0];
       charB = chars[1];
     } else if (chars.length === 1) {
       charA = chars[0];
-      charB = { name: "The Companion", role: "Companion", voiceTone: "Sarcastic & Witty" };
+      charB = { name: "Gabrielle", role: "Fellow Student", voiceTone: "Sarcastic & Witty" };
     } else {
       charA = { name: "William", role: "Lead Student", voiceTone: "Casual & Conversational" };
       charB = { name: "Gabrielle", role: "Fellow Student", voiceTone: "Sarcastic & Witty" };
     }
 
-    const nameA = charA.name;
-    const nameB = charB.name;
+    const nameA = getPreferredDisplayName(charA, "William");
+    const nameB = getPreferredDisplayName(charB, "Gabrielle");
     const toneA = String(charA.voiceTone || book?.dialogueTone || "Casual & Conversational").toLowerCase();
     const toneB = String(charB.voiceTone || (toneA.includes("sarcastic") ? "Casual & Conversational" : "Sarcastic & Witty")).toLowerCase();
 
@@ -764,10 +818,13 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
 
     // Intent detection
     const isArrival = /\b(?:arrive|arrives|arrived|arrival|landing|dropship|transport|shuttle|convoy|escort|director|commander|general|master|chancellor|dean)\b/i.test(promptLower);
-    const isWalkingOrTransit = !isArrival && /\b(?:walk|walking|walked|stroll|strolling|strolled|wander|wandering|pace|pacing|footsteps|stride|campus|grounds?|courtyard|corridor|hallway|path|avenue|street|sidewalk|quad|casual|casually|talking|moving)\b/i.test(cleanPrompt);
-    const isInvestigation = /\b(?:search|searching|searched|investigate|investigating|inspect|inspecting|examine|examining|check|checking|checked|look|looking|terminal|screen|file|files|locker|read|reading|find|found|study|studying|lab|note|notes|data|records?)\b/i.test(cleanPrompt);
-    const isCombatOrAction = /\b(?:fight|fighting|fought|strike|striking|struck|attack|attacking|attacked|hit|punch|kick|kicked|run|running|ran|flee|fleeing|escape|chase|chasing|hide|hiding|dodge|dodging|blast|shoot|blade|weapon|gun|door|breach)\b/i.test(cleanPrompt);
-    const isDowntimeOrRest = /\b(?:coffee|cafe|cafeteria|lunch|bench|sit|sitting|eat|drink|lounge|table|rest|pause|waiting|wait)\b/i.test(cleanPrompt);
+    const isMonsterThreat =
+      /\b(?:demon|demons|monster|monsters|creature|creatures|beast|beasts|fiend|fiends|aberration|anomaly|titan)\b/i.test(cleanPrompt) ||
+      (/\b(?:vibrat|tremor|quak|shaking)\b/i.test(cleanPrompt) && /\b(?:field|ground|track)\b/i.test(cleanPrompt));
+    const isWalkingOrTransit = !isArrival && !isMonsterThreat && /\b(?:walk|walking|walked|stroll|strolling|strolled|wander|wandering|pace|pacing|footsteps|stride|campus|grounds?|courtyard|corridor|hallway|path|avenue|street|sidewalk|quad|casual|casually|talking|moving)\b/i.test(cleanPrompt);
+    const isInvestigation = !isMonsterThreat && /\b(?:search|searching|searched|investigate|investigating|inspect|inspecting|examine|examining|check|checking|checked|look|looking|terminal|screen|file|files|locker|read|reading|find|found|study|studying|lab|note|notes|data|records?)\b/i.test(cleanPrompt);
+    const isCombatOrAction = !isMonsterThreat && /\b(?:fight|fighting|fought|strike|striking|struck|attack|attacking|attacked|hit|punch|kick|kicked|run|running|ran|flee|fleeing|escape|chase|chasing|hide|hiding|dodge|dodging|blast|shoot|blade|weapon|gun|door|breach)\b/i.test(cleanPrompt);
+    const isDowntimeOrRest = !isMonsterThreat && /\b(?:coffee|cafe|cafeteria|lunch|bench|sit|sitting|eat|drink|lounge|table|rest|pause|waiting|wait)\b/i.test(cleanPrompt);
 
     const getToneLine = (speakerName: string, tone: string, scenario: "walk_a" | "walk_b" | "search_a" | "search_b" | "combat_a" | "combat_b" | "rest_a" | "rest_b" | "dialogue_reply"): string => {
       const isCasual = /casual|conversational|relaxed|modern/i.test(tone);
@@ -873,7 +930,61 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
       ].join("\n\n");
     }
 
-    // 3. Walking / Campus / Transit (Simple English terms, living campus)
+    // 3. Monster / Demon Threat & Emergency Evacuation (Dynamic, Simple English terms)
+    if (isMonsterThreat) {
+      const monsterMatch = cleanPrompt.match(
+        /\b([A-Z][a-zA-Z0-9'’\-]+(?:\s+[A-Z][a-zA-Z0-9'’\-]+)*)\s+(?:demon|demons|monster|monsters|creature|creatures|beast|beasts|fiend|aberration|anomaly)\b/i
+      );
+      const monsterName = monsterMatch
+        ? `${monsterMatch[1]} demon`
+        : (cleanPrompt.match(/\b([a-zA-Z0-9'’\-]+(?:\s+[a-zA-Z0-9'’\-]+)?\s+(?:demon|monster|creature|beast))\b/i)?.[1] || "resonant demon");
+
+      const locationName = /\btrack\s+and\s+field\b/i.test(cleanPrompt)
+        ? "the track and field"
+        : /\b(?:stadium|sports\s+field|football\s+field)\b/i.test(cleanPrompt)
+        ? "the stadium field"
+        : "the sports field";
+
+      // Detect who talks more vs who listens
+      const charAIsTalkative =
+        new RegExp(`\\b${nameA}\\b[^.!?]*\\btalkative\\b|\\btalkative\\b[^.!?]*\\b${nameA}\\b`, "i").test(cleanPrompt);
+      const charBIsTalkative =
+        new RegExp(`\\b${nameB}\\b[^.!?]*\\btalkative\\b|\\btalkative\\b[^.!?]*\\b${nameB}\\b`, "i").test(cleanPrompt);
+      const charAIsListener =
+        new RegExp(`\\b${nameA}\\b[^.!?]*\\blistens?\\b|\\blistens?\\b[^.!?]*\\b${nameA}\\b`, "i").test(cleanPrompt);
+      const charBIsListener =
+        new RegExp(`\\b${nameB}\\b[^.!?]*\\blistens?\\b|\\blistens?\\b[^.!?]*\\b${nameB}\\b`, "i").test(cleanPrompt);
+
+      const talkativeSpeaker = (charBIsTalkative || charAIsListener)
+        ? nameB
+        : (charAIsTalkative ? nameA : (nameB.toLowerCase() === "gabrielle" ? nameB : nameA));
+      const quietListener = talkativeSpeaker === nameB ? nameA : nameB;
+
+      return [
+        `A cool morning breeze swept across the campus walkways, carrying dry leaves across the concrete between the academic halls.`,
+        `${talkativeSpeaker} was talking with her usual lively energy, gesturing with her hands as she hopped from one topic to the next, while ${quietListener} walked beside her with his hands in his pockets, listening patiently and nodding whenever she paused for a breath.`,
+        `Around them, the normal rhythm of campus life moved along as usual—students carrying heavy backpacks, distant laughter near the cafeteria, and small groups sitting by the fountain who lowered their voices to whisper as the two walked past.`,
+        `"And honestly, nobody should even act surprised," ${talkativeSpeaker} remarked with a quick, amused grin, glancing sideways at him. "They pretend everything is under control, but everyone knows they're scrambling behind closed doors."`,
+        `${quietListener} gave a quiet, faint smile, his dark eyes staying calm. "You talk enough for both of us," he replied softly. "Just keep your eyes open."`,
+        `Before ${talkativeSpeaker} could fire back another witty comment, a sudden wave of frantic shouts broke the morning quiet.`,
+        `Up ahead, the gates of ${locationName} burst open as a crowd of students came running out in pure panic.`,
+        `People were stumbling over their own feet, dropping gym bags and jackets onto the grass without stopping, and shoving past one another in a desperate rush to get away from the open stadium. Several underclassmen nearly fell on the concrete, their faces pale as they yelled for everyone to run.`,
+        `${talkativeSpeaker}'s banter stopped mid-sentence. Instead of joining the stampede toward the lecture halls, she and ${quietListener} came to an immediate halt, exchanging a sharp, knowing look.`,
+        `"Well, that definitely isn't morning track practice," ${talkativeSpeaker} said, all humor vanishing from her voice as she turned toward the stadium.`,
+        `"Let's check it out," ${quietListener} answered, his easy pace turning into purposeful strides against the flow of the fleeing crowd.`,
+        `As they stepped closer to the open gates of ${locationName}, the concrete walkway beneath their shoes began to vibrate.`,
+        `It was not a gentle shake. A deep, heavy vibration pulsed through the earth like a massive heartbeat, rattling the chain-link fences and sending ripples through water puddles along the walkway. With every step they took toward the entrance, the tremors grew stronger, vibrating right through their legs and chest.`,
+        `They pushed past the last of the fleeing students and slipped through the gate into the stadium.`,
+        `The metal bleachers were completely abandoned. Towels, water bottles, and spiked running shoes lay strewn across the red rubber track, left behind in the chaotic rush.`,
+        `Standing directly in the center of the open field was the ${monsterName}.`,
+        `The creature was massive. Thick, cracked dark skin pulsed with a deep, unnatural hum that tore through the morning air, shaking the soil beneath its heavy clawed feet. Every breath it released sent another violent shockwave rolling through the grass, ripping deep trenches into the turf.`,
+        `Its dark, glowing eyes slowly shifted away from the empty stands, locking straight onto ${quietListener} and ${talkativeSpeaker} at the edge of the track.`,
+        `${talkativeSpeaker} stepped up right beside ${quietListener}, her hands ready as the ground shuddered violently beneath them. "Looks like we found what scared everyone off."`,
+        `${quietListener} pulled his hands out of his jacket pockets, his calm expression hardening into cold focus as his eyes locked onto the beast. "Stay ready," he said quietly. "It sees us."`
+      ].join("\n\n");
+    }
+
+    // 4. Walking / Campus / Transit (Simple English terms, living campus)
     if (isWalkingOrTransit) {
       const dialogueA = silentA
         ? `*${nameA} walked in calm silence, hands in his pockets as he noticed the stares with a slight tilt of his head.*`
@@ -2210,6 +2321,13 @@ THE NARRATOR'S CREED & PRIME DIRECTIVE:
    - NO DIALOGUE OR THOUGHT REPETITION: Characters must never voice repetitive sentiments, warnings, or questions they have already uttered in previous turns (e.g. repeating "we don't have much time" or "who did this?"). Every utterance must contribute NEW information, an escalation, a shift in stakes, or a decisive reaction.
    - NO ACTION REPLAY: Never re-describe physical actions that were already performed in prior turns (e.g., drawing a weapon that was already drawn, stepping through a doorway already crossed, eyeing an exit already noted). Treat past actions as permanently resolved and progress forward.
    - PREVENT SCENE STAGNATION: If a scene has established atmosphere, do not re-describe the same fog, rain, room lighting, or silence. Advance the physical events and character dynamics.
+ 15. ABSOLUTE THREAT & ENTITY SEPARATION (NEVER MAKE MONSTERS INTO STUDENTS OR COMPANIONS):
+    - When the author's premise introduces a monster, demon, creature, beast, titan, fiend, or enemy anomaly (such as "a Tyran Resonant demon", "a shadow beast", "a blood fiend"):
+      • NEVER treat the creature as a student, companion, or speaking friend walking casually with the leads.
+      • NEVER replace or erase named companions (like Gabrielle or William) with the monster's name.
+      • The creature is strictly an environmental threat, an antagonistic encounter, or a terrifying anomaly in the scene.
+    - PRESERVE PREFERRED SHORT NAMES: Always use the familiar character name used in the author's prompt (e.g., use "William" instead of "Ethan William Erolson", and "Gabrielle" instead of "Gabrielle Sebastian de Vara") in third-person narration and dialogue tags.
+    - FAITHFULLY ADVANCE MULTI-STAGE PREMISES: If the author provides an evolving situation (e.g. peaceful stroll with talkative Gabrielle and listening William -> crowd running out in panic from the track and field -> investigating the vibration -> sighting the Tyran Resonant demon in the center of the field), you MUST unspool and dramatize EVERY stage of that premise. Do not stall or ignore the evacuation and demon sighting!
 
 Dynamic Character Manifest:
 If this turn introduces or mentions any NEW named characters into the book's world who are NOT already in the Known Characters list above, you MUST append a machine-readable block at the very end of your response:
@@ -2425,7 +2543,10 @@ THE NARRATOR'S REWRITE DIRECTIVE:
    - Eliminate echo words and repeated sentence structures. If a word, descriptor, or metaphor was used in the previous sentence or the original passage, do not repeat it.
    - Ban narrative looping: do not rehash known facts, repeated doubts, or identical warnings. Push the rewrite into fresh sensory territory and direct escalation.
    - Varied syntax: ensure every sentence begins with a different grammatical structure and varies in length.
-11. If this rewrite introduces NEW named characters not in the dramatis personae, append \`\`\`character-manifest at the end with JSON array.`;
+11. ABSOLUTE THREAT & ENTITY SEPARATION:
+   - When the rewrite instruction introduces a monster, demon, creature, beast, titan, or hostile anomaly (such as "a Tyran Resonant demon"), NEVER treat that creature as a human student, companion, or speaking friend walking casually with the characters. It is an antagonistic threat or environmental emergency.
+   - Always preserve the preferred short names the author uses (e.g. "William", "Gabrielle").
+12. If this rewrite introduces NEW named characters not in the dramatis personae, append \`\`\`character-manifest at the end with JSON array.`;
 
       const userContent = `ORIGINAL PASSAGE TO BE REROLLED & REWRITTEN:
 """
