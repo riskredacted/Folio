@@ -32,6 +32,9 @@ async function startServer() {
     });
   }
 
+  // Set of models known to return 404 Not Found during the process lifetime
+  const knownUnavailableModels = new Set<string>();
+
   // Helper to call Gemini with multi-model fallback and transient error retry (503/429)
   async function generateWithModelFallback(
     client: GoogleGenAI,
@@ -47,12 +50,10 @@ async function startServer() {
     }
   ): Promise<string> {
     const candidateModels = [
-      "gemini-3.6-flash",
-      "gemini-3.5-flash",
-      "gemini-3.5-flash-lite",
-      "gemini-3.1-pro-preview",
-      "gemini-3-flash-preview",
       "gemini-2.5-flash",
+      "gemini-3.7-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-2.5-pro",
       "gemini-2.0-flash",
     ];
 
@@ -60,6 +61,10 @@ async function startServer() {
 
     for (let i = 0; i < candidateModels.length; i++) {
       const modelName = candidateModels[i];
+      if (knownUnavailableModels.has(modelName)) {
+        continue;
+      }
+
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           const config: Record<string, any> = {
@@ -96,25 +101,31 @@ async function startServer() {
           const status = err?.status || err?.code;
           const rawMsg = String(err?.message || "");
 
-          // If prepayment credits are explicitly depleted across the billing project, stop early
-          const isPrepayDepleted = /prepayment.*depleted|prepay.*credits/i.test(rawMsg);
-          if (isPrepayDepleted) {
+          // If prepayment credits are explicitly depleted or quota is exhausted across the billing project, stop immediately
+          const isQuotaOrDepleted =
+            status === 429 ||
+            /depleted|prepay.*credits|resource_exhausted|billing|quota/i.test(rawMsg);
+          if (isQuotaOrDepleted) {
             throw err;
+          }
+
+          // If model doesn't exist (404), remember it and immediately try next model without retrying
+          if (status === 404 || /not[ _]?found/i.test(rawMsg)) {
+            knownUnavailableModels.add(modelName);
+            break;
           }
 
           const isTransient =
             status === 503 ||
-            status === 429 ||
             rawMsg.includes("503") ||
             rawMsg.includes("high demand") ||
-            rawMsg.includes("RESOURCE_EXHAUSTED");
+            rawMsg.includes("UNAVAILABLE");
 
           if (isTransient && attempt === 0) {
-            // Short backoff before second attempt
-            await new Promise((resolve) => setTimeout(resolve, 350));
+            // Brief backoff before second attempt
+            await new Promise((resolve) => setTimeout(resolve, 250));
           } else {
-            // Log transition and cascade to the next model in candidateModels
-            console.info(`[Model Fallback] ${modelName} unavailable (${status || "error"}), cascading to older version...`);
+            console.info(`[Model Fallback] ${modelName} unavailable (${status || "error"}), cascading to next candidate...`);
             break;
           }
         }
@@ -1874,7 +1885,7 @@ IMPORTANT: Output ONLY the raw JSON object, without markdown code fences.`;
       });
 
       try {
-        const thinkingBudget = reasoningLevel === "off" ? 0 : reasoningLevel === "high" ? 8192 : 2048;
+        const thinkingBudget = reasoningLevel === "off" ? 0 : reasoningLevel === "high" ? 4096 : 1024;
         const rawOutput = await generateWithModelFallback(client, {
           contents,
           systemInstruction,

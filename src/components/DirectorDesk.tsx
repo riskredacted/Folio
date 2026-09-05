@@ -599,8 +599,8 @@ ${rawText || 'Help me rethink and direct how this passage should be rewritten in
             <Brain className="w-3.5 h-3.5 text-[#7a282f]" />
             <span className="font-semibold text-[11px] text-[#24211e]">Reasoning:</span>
             <span className="text-[10px] text-[#7a7164] hidden sm:inline">
-              {reasoningLevel === 'off' && 'Direct, instant responses'}
-              {reasoningLevel === 'medium' && 'Balanced character & lore deliberation'}
+              {reasoningLevel === 'off' && 'Direct, instant responses (~1s)'}
+              {reasoningLevel === 'medium' && 'Fast deliberation (~3-5s)'}
               {reasoningLevel === 'high' && 'Deep multi-step worldbuilding reasoning'}
             </span>
           </div>
