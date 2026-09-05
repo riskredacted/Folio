@@ -291,37 +291,89 @@ async function startServer() {
     return sanitized;
   }
 
-  // Pull explicit multi-part names from a prose premise so a degraded response
-  // never replaces the author's cast with unrelated people.
+  const NON_PERSON_LOCATION_KEYWORDS = new Set([
+    // Educational & Academic
+    "school", "highschool", "high", "elementary", "academy", "university", "college", "institute", "institution", "campus", "dorm", "dormitory", "classroom", "faculty", "seminary",
+    // Medical & Public Facilities
+    "hospital", "clinic", "asylum", "sanatorium", "infirmary", "ward", "station", "terminal", "airport", "harbor", "port", "depot", "pier", "dock", "docks",
+    // Religious & Sacred
+    "church", "cathedral", "chapel", "temple", "monastery", "convent", "shrine", "mosque", "synagogue", "parish", "abbey", "sanctuary",
+    // Architectural & Castles
+    "castle", "palace", "manor", "estate", "hall", "mansion", "tower", "keep", "fort", "fortress", "citadel", "bunker", "vault", "dungeon", "prison", "jail", "penitentiary",
+    // Hospitality & Social
+    "hotel", "inn", "tavern", "pub", "bar", "saloon", "diner", "cafe", "restaurant", "motel", "hostel",
+    // Cultural
+    "library", "museum", "archive", "archives", "gallery", "theater", "theatre", "cinema", "stadium", "arena", "colosseum",
+    // Commercial & Industrial
+    "center", "centre", "complex", "building", "lab", "laboratory", "office", "headquarters", "facility", "plant", "factory", "mill", "warehouse", "shop", "store", "market",
+    // Streets & Geography
+    "street", "avenue", "boulevard", "road", "lane", "drive", "way", "alley", "court", "plaza", "square", "bridge",
+    "city", "town", "village", "county", "district", "borough", "state", "province", "country", "kingdom", "empire", "republic", "realm", "capital",
+    "lake", "river", "sea", "ocean", "mountain", "mount", "valley", "forest", "woods", "swamp", "marsh", "desert", "island", "isle", "bay", "cove", "gulf", "coast", "shore",
+    "planet", "star", "galaxy", "nebula", "system", "orbit", "earth", "mars", "jupiter", "moon", "sun",
+    // Organizations & Collectives
+    "department", "agency", "bureau", "federation", "corporation", "company", "guild", "order", "society", "council", "syndicate", "police", "alliance", "union", "league", "cult", "coven",
+    // Structural / Common words
+    "chapter", "volume", "prologue", "epilogue", "book", "story", "novel", "chronicle", "chronicles", "tale", "tales"
+  ]);
+
+  function isNonPersonName(name: string): boolean {
+    if (!name || typeof name !== "string") return true;
+    const trimmed = name.trim();
+    if (!trimmed) return true;
+    const words = trimmed.toLowerCase().split(/\s+/);
+    for (const word of words) {
+      const cleanWord = word.replace(/[^a-z]/g, "");
+      if (NON_PERSON_LOCATION_KEYWORDS.has(cleanWord)) return true;
+    }
+    return false;
+  }
+
+  // Pull explicit living person names from a prose premise while strictly excluding locations and institutions
   function extractExplicitCharacterNames(idea: string): string[] {
-    const properNamePattern =
-      /\b([A-Z][A-Za-z'’\-]+(?:\s+(?:(?:de|del|della|di|da|dos|du|la|le|van|von|der|den|bin|al)\s+)?[A-Z][A-Za-z'’\-]+){1,4})\b/g;
     const nonNameOpeners = new Set([
-      "A",
-      "An",
-      "The",
-      "This",
-      "That",
-      "These",
-      "Those",
-      "It",
-      "Its",
-      "Chapter",
-      "Book",
-      "Story",
+      "A", "An", "The", "This", "That", "These", "Those", "It", "Its", "They", "We", "You",
+      "Chapter", "Book", "Story", "In", "On", "At", "When", "While", "Where", "Why", "How",
+      "After", "Before", "Two", "Three", "Four", "Five", "Many", "Some", "Every", "All",
+      "During", "Under", "Inside", "Outside", "Across", "Along", "Between", "From", "Into",
+      "With", "Without", "Through", "Once", "One", "There", "Here", "Then", "Now"
     ]);
 
-    const names: string[] = [];
-    for (const match of idea.matchAll(properNamePattern)) {
-      const candidate = match[1].trim().replace(/[.,;:!?]+$/g, "");
+    const candidates: string[] = [];
+
+    // 1. Explicit multi-word proper names: "Arthur Pendelton", "Julian Cross"
+    const multiWordPattern =
+      /\b([A-Z][A-Za-z'’\-]+(?:\s+(?:(?:de|del|della|di|da|dos|du|la|le|van|von|der|den|bin|al)\s+)?[A-Z][A-Za-z'’\-]+){1,3})\b/g;
+    for (const match of idea.matchAll(multiWordPattern)) {
+      candidates.push(match[1].trim().replace(/[.,;:!?]+$/g, ""));
+    }
+
+    // 2. Co-occurring single names: "William and Gabrielle", "Julian & Silas"
+    const pairPattern = /\b([A-Z][A-Za-z'’\-]{2,})\s+(?:and|&)\s+([A-Z][A-Za-z'’\-]{2,})\b/g;
+    for (const match of idea.matchAll(pairPattern)) {
+      candidates.push(match[1].trim().replace(/[.,;:!?]+$/g, ""));
+      candidates.push(match[2].trim().replace(/[.,;:!?]+$/g, ""));
+    }
+
+    // 3. Titled names: "Professor Higgins", "Detective Miller", "Lady Cordelia"
+    const titlePattern =
+      /\b(?:Detective|Inspector|Doctor|Dr\.|Professor|Prof\.|Captain|Lord|Lady|Madame|Madam|Officer|Agent)\s+([A-Z][A-Za-z'’\-]+(?:\s+[A-Z][A-Za-z'’\-]+)?)\b/g;
+    for (const match of idea.matchAll(titlePattern)) {
+      candidates.push(match[1].trim().replace(/[.,;:!?]+$/g, ""));
+    }
+
+    const filteredNames: string[] = [];
+    for (const candidate of candidates) {
+      if (!candidate) continue;
       const firstWord = candidate.split(/\s+/)[0];
       if (nonNameOpeners.has(firstWord)) continue;
-      if (!names.some((name) => name.toLowerCase() === candidate.toLowerCase())) {
-        names.push(candidate);
+      if (isNonPersonName(candidate)) continue;
+      if (!filteredNames.some((name) => name.toLowerCase() === candidate.toLowerCase())) {
+        filteredNames.push(candidate);
       }
     }
 
-    return names;
+    return filteredNames;
   }
 
   function createPremiseCharacters(idea: string, names: string[]) {
@@ -857,7 +909,11 @@ YOUR SACRED MISSION AS THE NARRATOR:
 Take this raw creative spark and BREATHE PULSING, VIVID LIFE INTO IT.
 Transform the author's vision into a living, breathing literary universe—grounded with rich sensory atmosphere, compelling characters with real agency, and an electrifying opening prologue that immediately plunges the reader into the story.
 
-CRITICAL CHARACTER & PROSE NAMING MANDATE:
+CRITICAL CHARACTER & CAST MANDATE:
+- The "characters" array MUST ONLY contain actual living, sentient human or creature characters (e.g. students, professors, detectives, travelers, friends, rivals).
+- ABSOLUTE BAN ON INANIMATE LOCATIONS AS CHARACTERS:
+  NEVER EVER create a character out of a school, academy, university, college, building, city, hospital, organization, or inanimate location mentioned in the premise!
+  For example, if the author mentions "St. Jude Academy" or "London", that is the SETTING, NEVER a character in the cast!
 - ${explicitCharacterInstruction}
 - Every character in the "characters" array MUST have an authentic, distinctive, evocative proper name (e.g., 'Julian Mercer', 'Captain Kaelen Thorne', 'Evelyn Cross', 'Silas Kane').
 - In the "prologue" and "synopsis", write STRICTLY in the third person. Refer to characters ONLY by their actual proper names or third-person pronouns ('he', 'she', 'they')—NEVER use second-person 'you' in narration, and NEVER use the word 'protagonist'.
@@ -875,8 +931,8 @@ Output MUST be a single valid JSON object with EXACTLY this structure:
   "coverIcon": "Pick the most fitting from: BookOpen, Feather, Compass, Scroll, Sparkles, Shield, Coffee",
   "characters": [
     {
-      "name": "Actual distinctive proper name (e.g. Julian Mercer)",
-      "role": "Their role or position in the story (e.g. Lead Investigator / Master Alchemist)",
+      "name": "Actual distinctive proper name of a living person (e.g. Julian Mercer)",
+      "role": "Their role or position in the story (e.g. Lead Investigator / Master Alchemist / Student)",
       "description": "1-2 sentences on their personality, appearance, or background in this book",
       "voiceTone": "Character voice tone: 'Casual & Conversational', 'Poetic & Lyrical', 'Formal & Aristocratic', 'Gritty & Blunt', 'Scholarly & Analytical', 'Cryptic & Whispering', or 'Sarcastic & Witty'"
     }
@@ -884,8 +940,8 @@ Output MUST be a single valid JSON object with EXACTLY this structure:
 }
 
 ${explicitCharacterNames.length > 0
-  ? "The characters array must contain the explicitly named people above and no invented replacements or extra cast members."
-  : "Provide 2 to 4 distinctive characters in the characters array who are relevant to the opening scene."}
+  ? `The characters array must contain the explicitly named people (${explicitCharacterNames.join(', ')}) and other living cast members relevant to the opening scene. Do not create characters out of locations or buildings.`
+  : "Provide 2 to 4 distinctive living characters in the characters array who are relevant to the opening scene. Never create a character out of a location or school."}
 IMPORTANT: Respond with ONLY the raw JSON object, without markdown code fences or other text.`;
 
     try {
@@ -898,39 +954,79 @@ IMPORTANT: Respond with ONLY the raw JSON object, without markdown code fences o
 
       const bookData = safeParseJsonObject(rawOutput);
 
-      // Sanitize characters to ensure no placeholder names like "The Protagonist" slip through
+      // Sanitize characters to ensure no placeholder names or non-person entities slip through
       const rawChars = Array.isArray(bookData.characters) ? bookData.characters : [];
-      const generatedChars = rawChars.map((c: any, index: number) => {
-        let name = (c?.name || "").trim();
-        if (!name || /^[Tt]he\s+[Pp]rotagonist$|^[Pp]rotagonist$|^[Mm]ain\s+[Cc]haracter$|^[Tt]he\s+[Hh]ero$/i.test(name)) {
-          name = index === 0 ? "Julian Cross" : (index === 1 ? "Evelyn Ward" : `Companion ${index + 1}`);
-        }
-        return {
-          name,
-          role: c?.role ? String(c.role).trim() : "Dramatis Persona",
-          description: c?.description ? String(c.description).trim() : "An active figure in this story.",
-          voiceTone: c?.voiceTone ? String(c.voiceTone).trim() : (bookData.dialogueTone || "Casual & Conversational"),
-        };
-      });
+      let validPersons = rawChars
+        .filter((c: any) => {
+          const name = (c?.name || "").trim();
+          if (!name) return false;
+          // Strictly discard any character whose name or role matches an institution or location
+          if (isNonPersonName(name)) return false;
+          const role = (c?.role || "").toLowerCase();
+          if (isNonPersonName(role) && !/student|teacher|principal|headmaster|doctor|nurse|scholar|professor|investigator|detective/i.test(role)) {
+            return false;
+          }
+          return true;
+        })
+        .map((c: any, index: number) => {
+          let name = (c?.name || "").trim();
+          if (!name || /^[Tt]he\s+[Pp]rotagonist$|^[Pp]rotagonist$|^[Mm]ain\s+[Cc]haracter$|^[Tt]he\s+[Hh]ero$/i.test(name)) {
+            name = index === 0 ? "Julian Cross" : (index === 1 ? "Evelyn Ward" : `Companion ${index + 1}`);
+          }
+          return {
+            name,
+            role: c?.role ? String(c.role).trim() : "Dramatis Persona",
+            description: c?.description ? String(c.description).trim() : "An active figure in this story.",
+            voiceTone: c?.voiceTone ? String(c.voiceTone).trim() : (bookData.dialogueTone || "Casual & Conversational"),
+          };
+        });
 
-      const sanitizedChars = explicitCharacterNames.length > 0
-        ? explicitCharacterNames.map((explicitName) => {
-            const explicitParts = explicitName.toLowerCase().split(/\s+/);
-            const matchingCharacter = generatedChars.find((character: any) => {
-              const generatedName = character.name.toLowerCase();
-              return generatedName === explicitName.toLowerCase() ||
-                (generatedName.includes(explicitParts[0]) &&
-                  generatedName.includes(explicitParts[explicitParts.length - 1]));
-            });
-
-            return {
+      // If author explicitly named human characters that weren't captured by Gemini, make sure they are present
+      for (const explicitName of explicitCharacterNames) {
+        if (!isNonPersonName(explicitName)) {
+          const alreadyPresent = validPersons.some(
+            (p) =>
+              p.name.toLowerCase() === explicitName.toLowerCase() ||
+              p.name.toLowerCase().includes(explicitName.toLowerCase()) ||
+              explicitName.toLowerCase().includes(p.name.toLowerCase())
+          );
+          if (!alreadyPresent) {
+            validPersons.unshift({
               name: explicitName,
-              role: matchingCharacter?.role || (/\b(?:college|university|campus)\b/i.test(idea) ? "College Student" : "Central Character"),
-              description: matchingCharacter?.description || "A central character explicitly established in the original premise.",
-              voiceTone: matchingCharacter?.voiceTone || "Casual & Conversational",
-            };
-          })
-        : generatedChars;
+              role: /\b(?:college|university|school|academy|campus)\b/i.test(idea) ? "Student" : "Central Character",
+              description: "A central character established in the author's original premise.",
+              voiceTone: "Casual & Conversational",
+            });
+          }
+        }
+      }
+
+      // Ensure at least 2 distinct human characters exist
+      if (validPersons.length === 0) {
+        validPersons = [
+          {
+            name: "Julian Cross",
+            role: /\b(?:college|university|school|academy|campus)\b/i.test(idea) ? "Lead Student" : "Lead Protagonist",
+            description: "A determined figure navigating the events of the premise.",
+            voiceTone: "Casual & Conversational",
+          },
+          {
+            name: "Evelyn Ward",
+            role: /\b(?:college|university|school|academy|campus)\b/i.test(idea) ? "Fellow Student" : "Companion",
+            description: "A sharp-witted peer at the center of the story.",
+            voiceTone: "Sarcastic & Witty",
+          },
+        ];
+      } else if (validPersons.length === 1) {
+        validPersons.push({
+          name: validPersons[0].name.toLowerCase().includes("evelyn") ? "Julian Cross" : "Evelyn Ward",
+          role: /\b(?:college|university|school|academy|campus)\b/i.test(idea) ? "Fellow Student" : "Companion",
+          description: `Close companion and counterpart to ${validPersons[0].name}.`,
+          voiceTone: "Sarcastic & Witty",
+        });
+      }
+
+      const sanitizedChars = validPersons;
 
       const rawPrologue =
         bookData.prologue ||

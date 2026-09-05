@@ -164,9 +164,10 @@ export const BookModal: React.FC<BookModalProps> = ({
       setCoverIcon(genBook.coverIcon || 'BookOpen');
       setCharacters(
         Array.isArray(genBook.characters)
-          ? genBook.characters.map((c: { name: string; role?: string; description?: string }) => ({
+          ? genBook.characters.map((c: { name: string; role?: string; description?: string; voiceTone?: string }) => ({
               name: c.name || 'Unknown Stranger',
               role: c.role || 'Dramatis Persona',
+              voiceTone: c.voiceTone || genBook.dialogueTone || 'Casual & Conversational',
               description: c.description || 'Appeared in the story.',
             }))
           : []
