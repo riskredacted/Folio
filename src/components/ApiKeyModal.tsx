@@ -145,7 +145,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
         <div className="p-5 space-y-4 text-xs text-[#3d362e]">
           <div>
             <p className="leading-relaxed mb-2 text-[#5c544a]">
-              Folio uses Google Gemini models (<code className="font-mono text-[#7a282f] bg-[#eee7dc] px-1 py-0.5 rounded">gemini-3.6-flash</code>) to weave rich literary roleplay that follows your exact ideas.
+              Folio uses Google Gemini models (<code className="font-mono text-[#7a282f] bg-[#eee7dc] px-1 py-0.5 rounded">gemini-3.7-flash</code> & <code className="font-mono text-[#7a282f] bg-[#eee7dc] px-1 py-0.5 rounded">gemini-3.8-flash</code>) to weave rich literary roleplay that follows your exact ideas.
             </p>
             <p className="leading-relaxed text-[#5c544a]">
               If the default key runs out of prepayment credits, you can enter your own free API key from Google AI Studio below. It is stored privately in your browser.

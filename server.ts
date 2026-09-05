@@ -52,11 +52,11 @@ async function startServer() {
     }
   ): Promise<string> {
     const candidateModels = [
-      "gemini-3.6-flash",
-      "gemini-3.5-flash-lite",
       "gemini-3.7-flash",
+      "gemini-3.8-flash",
+      "gemini-3.6-flash",
       "gemini-3.5-flash",
-      "gemini-2.5-flash",
+      "gemini-3.5-flash-lite",
     ];
 
     let lastError: unknown = null;
@@ -1221,12 +1221,13 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
         httpOptions: { headers: { "User-Agent": "aistudio-build" } },
       });
 
-      // Try multiple candidate models so a transient 503 on one model doesn't fail the key test
+      // Try multiple candidate models prioritizing 3.7 and 3.8 flash
       const testCandidates = [
-        "gemini-3.5-flash-lite",
-        "gemini-3.6-flash",
         "gemini-3.7-flash",
+        "gemini-3.8-flash",
+        "gemini-3.6-flash",
         "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
       ];
 
       let lastError: any = null;
