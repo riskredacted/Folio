@@ -19,6 +19,15 @@ export const VOICE_TONE_OPTIONS = [
   { id: 'sarcastic', label: 'Sarcastic & Witty', description: 'Dry irony, biting humor, understated sharp quips' },
 ] as const;
 
+export type AIProvider = 'gemini' | 'ollama';
+
+export interface AIConfig {
+  provider: AIProvider;
+  geminiApiKey: string;
+  ollamaUrl: string;
+  ollamaModel: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -26,6 +35,7 @@ export interface ChatMessage {
   timestamp: number;
   speaker?: string; // Optional character or narrator attribution
   isOfflineFallback?: boolean; // True if response was produced by local dynamic premise engine
+  provider?: AIProvider | 'local';
 }
 
 export interface Chapter {

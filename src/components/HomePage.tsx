@@ -22,6 +22,7 @@ import {
   ArrowRight,
   BookMarked,
   Key,
+  Cpu,
 } from 'lucide-react';
 
 interface HomePageProps {
@@ -121,10 +122,10 @@ export const HomePage: React.FC<HomePageProps> = ({
               type="button"
               onClick={() => setShowApiKeyModal(true)}
               className="p-2 sm:px-3 sm:py-1.5 text-xs text-[#6e655b] hover:text-[#24211e] hover:bg-[#eee7dc] rounded-md border border-transparent hover:border-[#dfd6c8] transition-colors flex items-center gap-1.5"
-              title="Configure Google Gemini API Key"
+              title="Configure AI Engine (Gemini & Ollama)"
             >
-              <Key className="w-3.5 h-3.5 text-[#7a282f]" />
-              <span className="hidden sm:inline">AI Key</span>
+              <Cpu className="w-3.5 h-3.5 text-[#7a282f]" />
+              <span className="hidden sm:inline">AI Engine</span>
             </button>
 
             <button

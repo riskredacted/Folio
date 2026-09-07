@@ -37,6 +37,8 @@ import {
   Wand2,
   Loader2,
   Key,
+  Cpu,
+  Server,
 } from 'lucide-react';
 
 interface ChatAreaProps {
@@ -296,6 +298,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         reply?: string;
         newCharacters?: Array<{ name: string; role: string; description: string }>;
         apiWarning?: string | null;
+        isOfflineFallback?: boolean;
+        provider?: 'gemini' | 'ollama' | 'local';
       }>('/api/chat', {
         method: 'POST',
         body: JSON.stringify({
@@ -321,6 +325,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         content: replyContent,
         timestamp: Date.now(),
         isOfflineFallback: Boolean(data.isOfflineFallback || data.apiWarning),
+        provider: data.provider,
       };
 
       // Check for dynamically discovered new characters
@@ -418,6 +423,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         reply?: string;
         newCharacters?: Array<{ name: string; role: string; description: string }>;
         apiWarning?: string | null;
+        isOfflineFallback?: boolean;
+        provider?: 'gemini' | 'ollama' | 'local';
       }>('/api/chat', {
         method: 'POST',
         body: JSON.stringify({
@@ -441,6 +448,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         content: replyContent,
         timestamp: Date.now(),
         isOfflineFallback: Boolean(data.isOfflineFallback || data.apiWarning),
+        provider: data.provider,
       };
 
       const chapterWithReply: Chapter = {
@@ -851,10 +859,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               type="button"
               onClick={() => setShowApiKeyModal(true)}
               className="px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 border transition-colors bg-[#ffffff] text-[#3d362e] border-[#d8cfc4] hover:bg-[#f2ede4] hover:border-[#b8ad9e] shadow-2xs"
-              title="Configure Gemini API Key & Connection Status"
+              title="Configure AI Engine (Gemini & Ollama)"
             >
-              <Key className="w-3.5 h-3.5 text-[#7a282f]" />
-              <span className="font-sans">AI Key</span>
+              <Cpu className="w-3.5 h-3.5 text-[#7a282f]" />
+              <span className="font-sans">AI Engine</span>
             </button>
 
             <button
@@ -944,11 +952,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   >
                     <div className="flex items-center gap-2.5">
                       <div className="w-6 h-6 rounded-md bg-[#f4eee6] flex items-center justify-center text-[#7a282f]">
-                        <Key className="w-3.5 h-3.5" />
+                        <Cpu className="w-3.5 h-3.5" />
                       </div>
                       <div>
-                        <p className="font-semibold">Gemini API Key</p>
-                        <p className="text-[10px] text-[#8c8275]">Configure & Test AI Connection</p>
+                        <p className="font-semibold">AI Engine Settings</p>
+                        <p className="text-[10px] text-[#8c8275]">Gemini Cloud & Ollama Local LLM</p>
                       </div>
                     </div>
                   </button>
@@ -1066,7 +1074,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 onClick={() => setShowApiKeyModal(true)}
                 className="px-2.5 py-1 bg-[#d97706] hover:bg-[#b45309] text-white rounded text-[11px] font-medium transition-colors shadow-2xs"
               >
-                Configure Key
+                Configure AI
               </button>
               <button
                 type="button"
@@ -1204,14 +1212,26 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                       {isAssistant && msg.isOfflineFallback && (
                         <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#fff8e6] text-[#7c5e10] text-[10px] font-sans border border-[#f3d99f]">
                           <AlertCircle className="w-3 h-3 text-[#d97706] shrink-0" />
-                          <span>Local Engine (Gemini Credits Depleted)</span>
+                          <span>Local Dynamic Premise Engine</span>
                           <button
                             type="button"
                             onClick={() => setShowApiKeyModal(true)}
                             className="text-[#d97706] hover:text-[#b45309] font-semibold underline cursor-pointer ml-0.5"
                           >
-                            Enter Free Key
+                            Configure AI
                           </button>
+                        </div>
+                      )}
+                      {isAssistant && !msg.isOfflineFallback && msg.provider === 'ollama' && (
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#e8f2ec] text-[#2d4b3e] text-[10px] font-sans border border-[#c4ded0]">
+                          <Server className="w-3 h-3 text-[#2d4b3e] shrink-0" />
+                          <span>Ollama Local</span>
+                        </div>
+                      )}
+                      {isAssistant && !msg.isOfflineFallback && msg.provider === 'gemini' && (
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#f5efe6] text-[#7a282f] text-[10px] font-sans border border-[#dfd6c8]">
+                          <Sparkles className="w-3 h-3 text-[#7a282f] shrink-0" />
+                          <span>Gemini Live</span>
                         </div>
                       )}
                     </div>

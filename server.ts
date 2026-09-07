@@ -127,6 +127,173 @@ async function startServer() {
     throw lastError;
   }
 
+  // Helper to generate text or JSON using a local or remote Ollama instance
+  async function generateWithOllama(options: {
+    url?: string;
+    model?: string;
+    contents: any;
+    systemInstruction?: string;
+    temperature?: number;
+    topP?: number;
+    responseMimeType?: string;
+  }): Promise<string> {
+    const rawUrl = options.url || process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+    const baseUrl = rawUrl.replace(/\/+$/, "");
+    const model = (options.model || process.env.OLLAMA_MODEL || "llama3.2").trim();
+
+    const messages: Array<{ role: string; content: string }> = [];
+    if (options.systemInstruction && options.systemInstruction.trim()) {
+      messages.push({ role: "system", content: options.systemInstruction.trim() });
+    }
+
+    if (Array.isArray(options.contents)) {
+      for (const item of options.contents) {
+        if (!item) continue;
+        let role = "user";
+        if (item.role === "model" || item.role === "assistant") {
+          role = "assistant";
+        } else if (item.role === "system") {
+          role = "system";
+        }
+
+        let text = "";
+        if (typeof item === "string") {
+          text = item;
+        } else if (typeof item.content === "string") {
+          text = item.content;
+        } else if (Array.isArray(item.parts)) {
+          text = item.parts.map((p: any) => (typeof p === "string" ? p : p?.text || "")).join("\n");
+        } else if (item.text) {
+          text = item.text;
+        }
+
+        if (text.trim()) {
+          messages.push({ role, content: text });
+        }
+      }
+    } else if (typeof options.contents === "string") {
+      messages.push({ role: "user", content: options.contents });
+    }
+
+    const requestBody: Record<string, any> = {
+      model,
+      messages,
+      stream: false,
+      options: {
+        temperature: options.temperature ?? 0.85,
+        top_p: options.topP ?? 0.95,
+      },
+    };
+
+    if (options.responseMimeType === "application/json") {
+      requestBody.format = "json";
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 180000);
+
+    try {
+      const res = await fetch(`${baseUrl}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "");
+        throw new Error(`Ollama error (${res.status}): ${errorText || res.statusText}`);
+      }
+
+      const data: any = await res.json();
+      const rawText = data?.message?.content || data?.response || "";
+      // Strip reasoning tokens if model outputs them (e.g. DeepSeek-R1 <think>...</think>)
+      const cleanText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+      return cleanText;
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        throw new Error(`Ollama request timed out after 180s on model '${model}'.`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  // Helper to extract AI configuration from request headers or body
+  function extractAIConfig(req: express.Request) {
+    const rawProvider =
+      (req.headers["x-ai-provider"] as string) ||
+      req.body?.provider ||
+      process.env.AI_PROVIDER ||
+      "gemini";
+
+    const provider: "gemini" | "ollama" =
+      rawProvider.toLowerCase().trim() === "ollama" ? "ollama" : "gemini";
+
+    const customApiKey =
+      (req.headers["x-gemini-api-key"] as string) ||
+      req.body?.apiKey;
+
+    const rawOllamaUrl =
+      (req.headers["x-ollama-url"] as string) ||
+      req.body?.ollamaUrl ||
+      process.env.OLLAMA_BASE_URL ||
+      "http://localhost:11434";
+    const ollamaUrl = rawOllamaUrl.trim();
+
+    const rawOllamaModel =
+      (req.headers["x-ollama-model"] as string) ||
+      req.body?.ollamaModel ||
+      process.env.OLLAMA_MODEL ||
+      "llama3.2";
+    const ollamaModel = rawOllamaModel.trim();
+
+    return { provider, customApiKey, ollamaUrl, ollamaModel };
+  }
+
+  // Unified AI generation dispatcher that routes to Ollama or Gemini
+  async function executeAIGeneration(options: {
+    provider: "gemini" | "ollama";
+    customApiKey?: string;
+    ollamaUrl?: string;
+    ollamaModel?: string;
+    contents: any;
+    systemInstruction?: string;
+    temperature?: number;
+    topP?: number;
+    responseMimeType?: string;
+    thinkingConfig?: { thinkingBudget?: number };
+  }): Promise<{ text: string; providerUsed: "gemini" | "ollama" }> {
+    if (options.provider === "ollama") {
+      const text = await generateWithOllama({
+        url: options.ollamaUrl,
+        model: options.ollamaModel,
+        contents: options.contents,
+        systemInstruction: options.systemInstruction,
+        temperature: options.temperature,
+        topP: options.topP,
+        responseMimeType: options.responseMimeType,
+      });
+      return { text, providerUsed: "ollama" };
+    }
+
+    const client = getGeminiClient(options.customApiKey);
+    if (!client) {
+      throw new Error("No Gemini API key configured.");
+    }
+
+    const text = await generateWithModelFallback(client, {
+      contents: options.contents,
+      systemInstruction: options.systemInstruction,
+      temperature: options.temperature,
+      topP: options.topP,
+      responseMimeType: options.responseMimeType,
+      thinkingConfig: options.thinkingConfig,
+    });
+    return { text, providerUsed: "gemini" };
+  }
+
   // Robust JSON parser that handles markdown fences, commentary, and trailing characters
   function safeParseJsonObject(raw: string): any {
     if (!raw || typeof raw !== "string") {
@@ -1309,8 +1476,80 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
+      provider: process.env.AI_PROVIDER || "gemini",
       hasApiKey: Boolean(process.env.GEMINI_API_KEY),
+      ollamaUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
+      ollamaModel: process.env.OLLAMA_MODEL || "llama3.2",
     });
+  });
+
+  // Query installed models from an Ollama instance
+  app.get("/api/ollama/models", async (req, res) => {
+    try {
+      const rawUrl =
+        (req.query?.url as string) ||
+        (req.headers["x-ollama-url"] as string) ||
+        process.env.OLLAMA_BASE_URL ||
+        "http://localhost:11434";
+      const targetUrl = rawUrl.replace(/\/+$/, "");
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const response = await fetch(`${targetUrl}/api/tags`, {
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeoutId));
+
+      if (!response.ok) {
+        return res.json({
+          connected: false,
+          models: [],
+          error: `Ollama responded with status ${response.status}`,
+        });
+      }
+
+      const data: any = await response.json();
+      const models = Array.isArray(data?.models)
+        ? data.models.map((m: any) => m.name || m.model).filter(Boolean)
+        : [];
+
+      return res.json({
+        connected: true,
+        models,
+      });
+    } catch (err: any) {
+      return res.json({
+        connected: false,
+        models: [],
+        error: err?.message || "Failed to reach Ollama server.",
+      });
+    }
+  });
+
+  // Test Ollama server connection and model generation
+  app.post("/api/ollama/test", async (req, res) => {
+    try {
+      const url = req.body?.url || (req.headers["x-ollama-url"] as string) || process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+      const model = req.body?.model || (req.headers["x-ollama-model"] as string) || process.env.OLLAMA_MODEL || "llama3.2";
+
+      const reply = await generateWithOllama({
+        url,
+        model,
+        contents: "Respond with only the single word: READY",
+        temperature: 0.1,
+      });
+
+      return res.json({
+        valid: true,
+        model,
+        reply: reply.trim(),
+      });
+    } catch (err: any) {
+      return res.json({
+        valid: false,
+        error: err?.message || "Ollama test connection failed.",
+      });
+    }
   });
 
   // Test Gemini API key validity and active status with multi-model fallback
@@ -1420,34 +1659,86 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
     }
   });
 
-  // Persistently save or clear Gemini API key in memory and .env.local
+  // Helper to persist environment variables to .env.local and process.env
+  function persistEnvVars(updates: Record<string, string | undefined>) {
+    const envPath = path.resolve(process.cwd(), ".env.local");
+    let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf-8") : "";
+
+    for (const [name, val] of Object.entries(updates)) {
+      if (val === undefined) continue;
+      process.env[name] = val;
+      const regex = new RegExp(`${name}="?[^\\r\\n]*"?`);
+      if (regex.test(envContent)) {
+        envContent = envContent.replace(regex, `${name}="${val}"`);
+      } else {
+        envContent = `${envContent ? envContent.trim() + "\n" : ""}${name}="${val}"\n`;
+      }
+    }
+
+    fs.writeFileSync(envPath, envContent, "utf-8");
+  }
+
+  // Persistently save or clear AI configuration (Gemini & Ollama)
+  app.post("/api/save-config", async (req, res) => {
+    try {
+      const { provider, apiKey, ollamaUrl, ollamaModel } = req.body;
+
+      const updates: Record<string, string | undefined> = {};
+      if (typeof provider === "string" && provider.trim()) {
+        updates.AI_PROVIDER = provider.trim().toLowerCase();
+      }
+      if (typeof apiKey === "string") {
+        updates.GEMINI_API_KEY = apiKey.trim();
+      }
+      if (typeof ollamaUrl === "string" && ollamaUrl.trim()) {
+        updates.OLLAMA_BASE_URL = ollamaUrl.trim();
+      }
+      if (typeof ollamaModel === "string" && ollamaModel.trim()) {
+        updates.OLLAMA_MODEL = ollamaModel.trim();
+      }
+
+      persistEnvVars(updates);
+
+      return res.json({
+        success: true,
+        provider: process.env.AI_PROVIDER || "gemini",
+        hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+        ollamaUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
+        ollamaModel: process.env.OLLAMA_MODEL || "llama3.2",
+        message: "AI configuration saved successfully.",
+      });
+    } catch (err: any) {
+      console.error("[Save-Config] Error updating configuration:", err);
+      return res.status(500).json({ error: err?.message || "Failed to save configuration." });
+    }
+  });
+
+  // Backward-compatible API key endpoint (now also saves provider/Ollama options if provided)
   app.post("/api/save-key", async (req, res) => {
     try {
-      const { apiKey } = req.body;
+      const { apiKey, provider, ollamaUrl, ollamaModel } = req.body;
       const cleanKey = typeof apiKey === "string" ? apiKey.trim() : "";
 
-      process.env.GEMINI_API_KEY = cleanKey;
+      const updates: Record<string, string | undefined> = {
+        GEMINI_API_KEY: cleanKey,
+      };
 
-      const envPath = path.resolve(process.cwd(), ".env.local");
-      let envContent = "";
-      if (fs.existsSync(envPath)) {
-        envContent = fs.readFileSync(envPath, "utf-8");
+      if (typeof provider === "string" && provider.trim()) {
+        updates.AI_PROVIDER = provider.trim().toLowerCase();
+      }
+      if (typeof ollamaUrl === "string" && ollamaUrl.trim()) {
+        updates.OLLAMA_BASE_URL = ollamaUrl.trim();
+      }
+      if (typeof ollamaModel === "string" && ollamaModel.trim()) {
+        updates.OLLAMA_MODEL = ollamaModel.trim();
       }
 
-      if (/GEMINI_API_KEY=/.test(envContent)) {
-        envContent = envContent.replace(
-          /GEMINI_API_KEY="?[^\r\n]*"?/,
-          `GEMINI_API_KEY="${cleanKey}"`
-        );
-      } else {
-        envContent = `${envContent ? envContent.trim() + "\n" : ""}GEMINI_API_KEY="${cleanKey}"\n`;
-      }
-
-      fs.writeFileSync(envPath, envContent, "utf-8");
+      persistEnvVars(updates);
 
       return res.json({
         success: true,
         hasKey: Boolean(cleanKey),
+        provider: process.env.AI_PROVIDER || "gemini",
         message: cleanKey
           ? "API key successfully saved to server environment."
           : "API key removed from server.",
@@ -1470,10 +1761,10 @@ ${char1} walked with an unhurried stride, hands loosely buried in jacket pockets
       ? `The author explicitly named these people: ${explicitCharacterNames.join(", ")}. Preserve every full name EXACTLY as written. Include all of them in the characters array. Do not rename, omit, merge, or replace them. Do not add other named characters to the cast unless the author explicitly named them in the premise.`
       : "The author did not explicitly name anyone. You may create characters appropriate to the premise.";
 
-    const customKey = (req.headers["x-gemini-api-key"] as string) || req.body?.apiKey;
-    const client = getGeminiClient(customKey);
-    if (!client) {
-      // If no API key configured, generate a high-quality template book concept
+    const aiConfig = extractAIConfig(req);
+    const client = getGeminiClient(aiConfig.customApiKey);
+    if (aiConfig.provider === "gemini" && !client) {
+      // If Gemini requested but no API key configured, generate a high-quality template book concept
       return res.json({
         book: createFallbackBookFromIdea(idea),
         note: "Created using default literary template (GEMINI_API_KEY not set).",
@@ -1524,7 +1815,11 @@ ${explicitCharacterNames.length > 0
 IMPORTANT: Respond with ONLY the raw JSON object, without markdown code fences or other text.`;
 
     try {
-      const rawOutput = await generateWithModelFallback(client, {
+      const { text: rawOutput } = await executeAIGeneration({
+        provider: aiConfig.provider,
+        customApiKey: aiConfig.customApiKey,
+        ollamaUrl: aiConfig.ollamaUrl,
+        ollamaModel: aiConfig.ollamaModel,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         temperature: 0.85,
         topP: 0.95,
@@ -1980,12 +2275,12 @@ Future chapters and character interactions will receive this fact as an explicit
         });
       }
 
-      const customKey = (req.headers["x-gemini-api-key"] as string) || req.body?.apiKey;
-      const client = getGeminiClient(customKey);
-      if (!client) {
+      const aiConfig = extractAIConfig(req);
+      const client = getGeminiClient(aiConfig.customApiKey);
+      if (aiConfig.provider === "gemini" && !client) {
         if (fileAttachments.length > 0) {
           return res.status(503).json({
-            error: "Gemini is unavailable, so the attached files were not read and no changes were applied. Your files remain staged for retry.",
+            error: "Gemini is unavailable, so the attached files were not read and no changes were applied. Configure a Gemini key or switch to Ollama in AI Settings.",
           });
         }
         return res.json(heuristicDirectorUpdate(book, effectiveInstruction, attachments, reasoningLevel));
@@ -2148,7 +2443,11 @@ IMPORTANT: Output ONLY the raw JSON object, without markdown code fences.`;
 
       try {
         const thinkingBudget = reasoningLevel === "off" ? 0 : reasoningLevel === "high" ? 4096 : 1024;
-        const rawOutput = await generateWithModelFallback(client, {
+        const { text: rawOutput } = await executeAIGeneration({
+          provider: aiConfig.provider,
+          customApiKey: aiConfig.customApiKey,
+          ollamaUrl: aiConfig.ollamaUrl,
+          ollamaModel: aiConfig.ollamaModel,
           contents,
           systemInstruction,
           temperature: 0.7,
@@ -2273,11 +2572,11 @@ IMPORTANT: Output ONLY the raw JSON object, without markdown code fences.`;
         });
       }
 
-      const customKey = (req.headers["x-gemini-api-key"] as string) || req.body?.apiKey;
-      const client = getGeminiClient(customKey);
+      const aiConfig = extractAIConfig(req);
+      const client = getGeminiClient(aiConfig.customApiKey);
       const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
 
-      if (!client) {
+      if (aiConfig.provider === "gemini" && !client) {
         const fallbackChars: Array<{ name: string; role: string; description: string; voiceTone?: string }> = [];
         if (lastUserMsg) {
           const explicitInMsg = extractExplicitCharacterNames(lastUserMsg);
@@ -2297,8 +2596,9 @@ IMPORTANT: Output ONLY the raw JSON object, without markdown code fences.`;
         return res.json({
           reply: sanitizeNarrativeOutput(createDynamicPremiseNarrative(book, lastUserMsg, messages), book),
           newCharacters: fallbackChars,
-          apiWarning: "No Gemini API key configured. Story generated using the local dynamic premise engine. Add a free API key from Google AI Studio in Settings for live AI generation.",
+          apiWarning: "No Gemini API key configured. Story generated using the local dynamic premise engine. Configure a key or switch to Ollama in AI Settings.",
           isOfflineFallback: true,
+          provider: "local",
         });
       }
 
@@ -2500,21 +2800,31 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
 
       let rawReply = "";
       let apiWarning: string | null = null;
+      let providerUsed: "gemini" | "ollama" | "local" = aiConfig.provider;
       try {
-        rawReply = await generateWithModelFallback(client, {
+        const result = await executeAIGeneration({
+          provider: aiConfig.provider,
+          customApiKey: aiConfig.customApiKey,
+          ollamaUrl: aiConfig.ollamaUrl,
+          ollamaModel: aiConfig.ollamaModel,
           contents,
           systemInstruction,
           temperature: 0.85,
           topP: 0.95,
         });
+        rawReply = result.text;
+        providerUsed = result.providerUsed;
       } catch (_err: any) {
+        providerUsed = "local";
         const rawMsg = String(_err?.message || "");
-        if (
+        if (aiConfig.provider === "ollama") {
+          apiWarning = `Ollama notice: ${rawMsg || "Connection failed"}. Story generated using local dynamic premise engine. Make sure Ollama is running at ${aiConfig.ollamaUrl}.`;
+        } else if (
           _err?.status === 429 ||
           /depleted|prepay.*credits|resource_exhausted|billing/i.test(rawMsg)
         ) {
           apiWarning =
-            "Gemini API notice: Prepayment credits are depleted ($0 balance). The scene was generated using the local dynamic premise engine. Configure a free API key in Settings for live AI generation.";
+            "Gemini API notice: Prepayment credits are depleted ($0 balance). The scene was generated using the local dynamic premise engine. Configure a free API key in Settings or switch to Ollama.";
         } else {
           apiWarning = `Gemini API notice: ${rawMsg || "Connection failed"}. Story generated using local dynamic premise engine.`;
         }
@@ -2534,34 +2844,41 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
           const parsed = JSON.parse(match[1]);
           if (Array.isArray(parsed)) {
             for (const item of parsed) {
-              if (item && typeof item.name === "string" && item.name.trim()) {
-                discoveredCharacters.push({
-                  name: item.name.trim(),
-                  role: item.role ? String(item.role).trim() : "Character",
-                  description: item.description ? String(item.description).trim() : "Mentioned in the story.",
-                  voiceTone: item.voiceTone ? String(item.voiceTone).trim() : defaultBookTone,
-                });
+              if (item && item.name && typeof item.name === "string") {
+                const cleanName = item.name.trim();
+                // Never register an institution or location as a character
+                if (!isNonPersonName(cleanName)) {
+                  discoveredCharacters.push({
+                    name: cleanName,
+                    role: item.role || "Character",
+                    description: item.description || "Encountered in the scene.",
+                    voiceTone: item.voiceTone || book.dialogueTone || "Casual & Conversational",
+                  });
+                }
               }
             }
           }
         } catch {
-          // Ignore parse errors on trailing manifests
+          // Ignore manifest parsing failure gracefully
         }
-        // Strip manifest block from user-visible narrative
-        cleanReply = rawReply.replace(manifestRegex, "").trim();
+        // Remove the code block from the user-facing text
+        cleanReply = cleanReply.replace(manifestRegex, "").trim();
       }
 
-      // If no characters were discovered by model manifest, check if user mentioned any explicit new characters
-      if (discoveredCharacters.length === 0 && lastUserMsg) {
+      // Also auto-extract any explicitly named entities from the user's latest prompt if they don't already exist
+      if (lastUserMsg) {
         const explicitInMsg = extractExplicitCharacterNames(lastUserMsg);
         const existingNames = new Set((book?.characters || []).map((c: any) => c?.name?.toLowerCase()));
+        for (const dc of discoveredCharacters) {
+          existingNames.add(dc.name.toLowerCase());
+        }
         for (const name of explicitInMsg) {
           if (!existingNames.has(name.toLowerCase())) {
             discoveredCharacters.push({
               name,
               role: /\b(?:college|university|school|academy|campus)\b/i.test(book?.setting || lastUserMsg) ? "Student" : "Character",
-              description: "Active in the scene.",
-              voiceTone: defaultBookTone,
+              description: "Introduced in the scene.",
+              voiceTone: book?.dialogueTone || "Casual & Conversational",
             });
             existingNames.add(name.toLowerCase());
           }
@@ -2576,6 +2893,7 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
         newCharacters: discoveredCharacters,
         apiWarning,
         isOfflineFallback: Boolean(apiWarning),
+        provider: providerUsed,
       });
     } catch (_error: unknown) {
       const fallbackBook = req.body?.book || { title: "Untitled", characters: [] };
@@ -2618,9 +2936,9 @@ If no new characters were introduced in this turn, omit the \`\`\`character-mani
         });
       }
 
-      const customKey = (req.headers["x-gemini-api-key"] as string) || req.body?.apiKey;
-      const client = getGeminiClient(customKey);
-      if (!client) {
+      const aiConfig = extractAIConfig(req);
+      const client = getGeminiClient(aiConfig.customApiKey);
+      if (aiConfig.provider === "gemini" && !client) {
         const fallback = createFallbackRewrite(originalPassage, userInstruction, book);
         return res.json({
           reply: fallback,
@@ -2707,21 +3025,26 @@ THE NARRATOR'S REWRITE DIRECTIVE:
    - Always preserve the preferred short names the author uses (e.g. "William", "Gabrielle").
 12. If this rewrite introduces NEW named characters not in the dramatis personae, append \`\`\`character-manifest at the end with JSON array.`;
 
-      const userContent = `ORIGINAL PASSAGE TO BE REROLLED & REWRITTEN:
+      const userContent = `Here is the story passage to rewrite:
 """
 ${originalPassage}
 """
 
-AUTHOR'S SPECIFIC INSTRUCTIONS FOR THE REWRITE:
-"""
-${userInstruction ? userInstruction.trim() : "Reroll this passage with fresh dramatic tension, vivid sensory details, and an unexpected narrative beat."}
-"""
+Author's specific rewrite instruction:
+"${userInstruction || "Rewrite this passage to make the pacing tighter, the sensory descriptions more immersive, and the dialogue sharper and punchier while keeping all established character actions consistent."}"
+
+Context from surrounding chapter:
+${Array.isArray(contextMessages) && contextMessages.length > 0 ? contextMessages.map((m: any) => `${m.role === "assistant" ? "Story" : "Author"}: ${m.content}`).slice(-4).join("\n\n") : "No prior chapter messages."}
 
 Provide the fully rewritten, updated story passage now:`;
 
       let rawReply = "";
       try {
-        rawReply = await generateWithModelFallback(client, {
+        const result = await executeAIGeneration({
+          provider: aiConfig.provider,
+          customApiKey: aiConfig.customApiKey,
+          ollamaUrl: aiConfig.ollamaUrl,
+          ollamaModel: aiConfig.ollamaModel,
           contents: [
             {
               role: "user",
@@ -2732,6 +3055,7 @@ Provide the fully rewritten, updated story passage now:`;
           temperature: 0.9,
           topP: 0.95,
         });
+        rawReply = result.text;
       } catch (_err: any) {
         rawReply = createFallbackRewrite(originalPassage, userInstruction, book);
       }
@@ -2770,11 +3094,13 @@ Provide the fully rewritten, updated story passage now:`;
         rewrittenPassage: cleanReply,
         newCharacters: discoveredCharacters,
       });
-    } catch (_error: unknown) {
-      const fallbackPassage = typeof req.body?.originalPassage === "string" ? req.body.originalPassage : "";
-      const fallbackInstruction = typeof req.body?.userInstruction === "string" ? req.body.userInstruction : "";
-      const fallbackBook = req.body?.book || null;
-      const fallback = sanitizeNarrativeOutput(createFallbackRewrite(fallbackPassage, fallbackInstruction, fallbackBook), fallbackBook);
+    } catch (err: any) {
+      console.error("[Rewrite Passage] Error:", err);
+      const fallback = createFallbackRewrite(
+        req.body?.originalPassage || "",
+        req.body?.userInstruction || "",
+        req.body?.book || {}
+      );
       return res.json({
         reply: fallback,
         rewrittenPassage: fallback,
@@ -2791,9 +3117,9 @@ Provide the fully rewritten, updated story passage now:`;
         return res.status(400).json({ error: "Text to correct is required." });
       }
 
-      const customKey = (req.headers["x-gemini-api-key"] as string) || req.body?.apiKey;
-      const client = getGeminiClient(customKey);
-      if (!client) {
+      const aiConfig = extractAIConfig(req);
+      const client = getGeminiClient(aiConfig.customApiKey);
+      if (aiConfig.provider === "gemini" && !client) {
         // Simple fallback cleanup if no API key
         let cleaned = text.trim();
         cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
@@ -2815,14 +3141,18 @@ YOUR SOLE OBJECTIVE:
         },
       ];
 
-      const rawResponse = await generateWithModelFallback(client, {
+      const result = await executeAIGeneration({
+        provider: aiConfig.provider,
+        customApiKey: aiConfig.customApiKey,
+        ollamaUrl: aiConfig.ollamaUrl,
+        ollamaModel: aiConfig.ollamaModel,
         contents,
         systemInstruction,
         temperature: 0.1,
         topP: 0.8,
       });
 
-      let correctedText = rawResponse.trim();
+      let correctedText = result.text.trim();
       // Remove accidental wrapping markdown fences if returned
       correctedText = correctedText
         .replace(/^```[a-z]*\n?/i, "")

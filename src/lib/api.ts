@@ -11,13 +11,34 @@ export async function safeFetchJson<T = any>(
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
+      const storedProvider =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('folio_ai_provider') || 'gemini'
+          : 'gemini';
       const storedApiKey =
         typeof window !== 'undefined'
           ? localStorage.getItem('folio_gemini_api_key')
           : null;
-      const extraHeaders: Record<string, string> = {};
+      const storedOllamaUrl =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('folio_ollama_url')
+          : null;
+      const storedOllamaModel =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('folio_ollama_model')
+          : null;
+
+      const extraHeaders: Record<string, string> = {
+        'x-ai-provider': storedProvider,
+      };
       if (storedApiKey && storedApiKey.trim()) {
         extraHeaders['x-gemini-api-key'] = storedApiKey.trim();
+      }
+      if (storedOllamaUrl && storedOllamaUrl.trim()) {
+        extraHeaders['x-ollama-url'] = storedOllamaUrl.trim();
+      }
+      if (storedOllamaModel && storedOllamaModel.trim()) {
+        extraHeaders['x-ollama-model'] = storedOllamaModel.trim();
       }
 
       const response = await fetch(input, {
